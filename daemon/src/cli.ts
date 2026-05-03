@@ -12,6 +12,9 @@
  */
 
 import { runManagedBoot } from "./managed-bootstrap";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 interface ParsedArgs {
   managedAgentId: string | null;
@@ -42,11 +45,27 @@ function parseArgs(argv: string[]): ParsedArgs {
   return { managedAgentId, endpoint, rest };
 }
 
-async function runUnmanaged(_rest: string[]): Promise<void> {
-  // Placeholder for the standard OpenClaw boot path. After vendoring the
-  // upstream repo, replace this with: `await import("./<original-entry>");`
-  console.log("[openclaw] unmanaged mode — no local OpenClaw entry point linked yet.");
-  console.log("[openclaw] vendor the upstream repo and update src/cli.ts to forward here.");
+async function runUnmanaged(rest: string[]): Promise<void> {
+  const cliDir = import.meta.dir;
+  const upstreamEntryPath = resolve(cliDir, "../upstream/openclaw.mjs");
+
+  if (!existsSync(upstreamEntryPath)) {
+    console.log("[openclaw] unmanaged mode — no local OpenClaw entry point linked yet.");
+    console.log("[openclaw] vendor the upstream repo and update src/cli.ts to forward here.");
+    return;
+  }
+
+  const originalArgv = [...process.argv];
+  process.argv = [originalArgv[0] ?? "openclaw", upstreamEntryPath, ...rest];
+
+  try {
+    await import(pathToFileURL(upstreamEntryPath).href);
+  } catch (error) {
+    console.error("[openclaw] failed to run vendored upstream entrypoint:", error);
+    console.log("[openclaw] unmanaged mode fallback is active.");
+  } finally {
+    process.argv = originalArgv;
+  }
 }
 
 async function main(): Promise<void> {
