@@ -26,6 +26,7 @@ export default function RootLayout({
     <html lang="en" className="bg-background">
       <body
         className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}
+        suppressHydrationWarning
       >
         {children}
       </body>
