@@ -5,21 +5,7 @@ import { openclawProvisionWorkflow } from "@/workflows/openclaw-provision";
 import { sql } from "@/lib/db";
 import type { ModelProviderType } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
-
-/**
- * Simple encryption for API keys using base64 + XOR with a secret.
- * In production, use a proper encryption library like crypto.
- */
-function encryptApiKey(apiKey: string): string {
-  const secret = process.env.ENCRYPTION_SECRET || "openclaw-dev-secret";
-  let encrypted = "";
-  for (let i = 0; i < apiKey.length; i++) {
-    encrypted += String.fromCharCode(
-      apiKey.charCodeAt(i) ^ secret.charCodeAt(i % secret.length)
-    );
-  }
-  return Buffer.from(encrypted).toString("base64");
-}
+import { encryptKey } from "@/lib/encryption";
 
 export async function startProvisionWorker(
   taskDescription: string,
@@ -42,8 +28,8 @@ export async function startProvisionWorker(
   // Generate a human-readable agent name from the task
   const agentName = `Worker-${Date.now().toString(36).toUpperCase()}`;
 
-  // Encrypt the API key if provided
-  const encryptedKey = apiKey ? encryptApiKey(apiKey) : null;
+  // Encrypt the API key using AES-256-GCM if provided
+  const encryptedKey = apiKey ? encryptKey(apiKey) : null;
 
   // Insert the agent record with 'provisioning' status
   const [agent] = await sql<{ id: string }[]>`

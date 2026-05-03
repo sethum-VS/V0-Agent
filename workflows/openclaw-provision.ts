@@ -4,6 +4,7 @@ import { FatalError } from "workflow";
 import { neon } from "@neondatabase/serverless";
 import type { ProvisionHandoff } from "@/lib/provision-types";
 import type { ModelProviderType } from "@/lib/db";
+import { decryptKey } from "@/lib/encryption";
 
 const tokenSchema = z.object({
   botRegistrationId: z.string().min(1),
@@ -26,20 +27,7 @@ const gateway = createGateway({
 /** Designated model routed through the Vercel AI Gateway. */
 const SYSTEM_MODEL = gateway("openai/gpt-5.5");
 
-/**
- * Decrypt an API key that was encrypted with simple XOR.
- */
-function decryptApiKey(encryptedKey: string): string {
-  const secret = process.env.ENCRYPTION_SECRET || "openclaw-dev-secret";
-  const decoded = Buffer.from(encryptedKey, "base64").toString();
-  let decrypted = "";
-  for (let i = 0; i < decoded.length; i++) {
-    decrypted += String.fromCharCode(
-      decoded.charCodeAt(i) ^ secret.charCodeAt(i % secret.length)
-    );
-  }
-  return decrypted;
-}
+
 
 /**
  * Get the model used by the provisioning workflow.
