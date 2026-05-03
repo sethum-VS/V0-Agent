@@ -15,9 +15,9 @@ export async function POST(req: NextRequest) {
     }
 
     // Find user by email
-    const users = await sql<{ id: string; password_hash: string }[]>`
+    const users = (await sql`
       SELECT id, password_hash FROM users WHERE email = ${email.toLowerCase()}
-    `;
+    `) as { id: string; password_hash: string }[];
 
     if (users.length === 0) {
       return NextResponse.json(

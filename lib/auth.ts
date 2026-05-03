@@ -24,9 +24,9 @@ export async function getCurrentUser(): Promise<User | null> {
   }
 
   // Fetch user from database
-  const users = await sql<{ id: string; email: string }[]>`
+  const users = (await sql`
     SELECT id, email FROM users WHERE id = ${userId}
-  `;
+  `) as { id: string; email: string }[];
 
   if (users.length === 0) {
     return null;

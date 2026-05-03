@@ -24,9 +24,9 @@ export async function POST(req: NextRequest) {
     const normalizedEmail = email.toLowerCase();
 
     // Check if user already exists
-    const existing = await sql<{ id: string }[]>`
+    const existing = (await sql`
       SELECT id FROM users WHERE email = ${normalizedEmail}
-    `;
+    `) as { id: string }[];
 
     if (existing.length > 0) {
       return NextResponse.json(
@@ -39,11 +39,12 @@ export async function POST(req: NextRequest) {
     const passwordHash = await bcrypt.hash(password, 12);
 
     // Create user
-    const [user] = await sql<{ id: string }[]>`
+    const userRows = (await sql`
       INSERT INTO users (email, password_hash)
       VALUES (${normalizedEmail}, ${passwordHash})
       RETURNING id
-    `;
+    `) as { id: string }[];
+    const user = userRows[0];
 
     // Set session cookie
     const cookieStore = await cookies();

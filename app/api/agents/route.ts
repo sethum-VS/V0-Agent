@@ -18,7 +18,7 @@ export async function GET() {
     );
   }
 
-  const agents = await sql<Agent[]>`
+  const agents = (await sql`
     SELECT 
       id,
       user_id,
@@ -33,7 +33,7 @@ export async function GET() {
     FROM agents
     WHERE user_id = ${user.id}
     ORDER BY created_at DESC
-  `;
+  `) as Agent[];
 
   return NextResponse.json({ agents });
 }
