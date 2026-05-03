@@ -1,4 +1,5 @@
-import { generateObject, generateText, APICallError, createGateway, createOpenAI } from "ai";
+import { generateObject, generateText, APICallError, createGateway } from "ai";
+import { createOpenAI } from "@ai-sdk/openai";
 import { z } from "zod";
 import { FatalError } from "workflow";
 import { neon } from "@neondatabase/serverless";

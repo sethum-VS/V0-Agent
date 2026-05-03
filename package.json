@@ -26,6 +26,7 @@
     }
   },
   "dependencies": {
+    "@ai-sdk/openai": "^3.0.58",
     "@neondatabase/serverless": "^0.10.4",
     "@radix-ui/react-slot": "^1.2.4",
     "ai": "^6.0.174",
