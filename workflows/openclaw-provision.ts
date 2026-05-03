@@ -172,24 +172,26 @@ async function updateAgentStatusStep(
 async function handoffStep(
   soulMd: string,
   tokens: z.infer<typeof tokenSchema>,
+  agentId: string,
 ): Promise<ProvisionHandoff> {
   "use step";
 
   console.log("[openclaw-provision] step handoff start");
 
-  const dockerCommand = [
-    "docker run --rm -it \\",
-    '  -v "$(pwd)/config:/app/config" \\',
-    `  -e OPENCLAW_BOT_ID=${tokens.botRegistrationId} \\`,
-    `  -e OPENCLAW_MESSAGING_TOKEN=${tokens.messagingToken} \\`,
-    `  -e OPENCLAW_WEBHOOK_SECRET=${tokens.webhookSecret} \\`,
-    "  openclaw/daemon:latest",
-  ].join("\n");
+  // Resolve the base URL: use VERCEL_PROJECT_PRODUCTION_URL on Vercel,
+  // fall back to NEXTAUTH_URL or localhost for local dev.
+  const baseUrl =
+    process.env.VERCEL_PROJECT_PRODUCTION_URL
+      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+      : process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+
+  const linkCommand =
+    `openclaw link --agent-id ${agentId} --endpoint ${baseUrl}/api/agents`;
 
   const payload: ProvisionHandoff = {
     soulMd,
     tokens,
-    dockerCommand,
+    linkCommand,
   };
 
   console.log("[openclaw-provision] step handoff done");
@@ -214,8 +216,8 @@ export async function openclawProvisionWorkflow(
   // Step 3: Provision API tokens
   const tokens = await provisionApiStep(userPrompt);
 
-  // Step 4: Build the handoff payload
-  const handoff = await handoffStep(soulMd, tokens);
+  // Step 4: Build the handoff payload (includes the openclaw link command)
+  const handoff = await handoffStep(soulMd, tokens, agentId);
 
   // Step 5: Mark agent as ready for daemon connection (user-scoped)
   await updateAgentStatusStep(agentId, userId, "awaiting_connection");

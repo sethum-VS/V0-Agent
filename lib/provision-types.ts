@@ -5,5 +5,6 @@ export type ProvisionHandoff = {
     messagingToken: string;
     webhookSecret: string;
   };
-  dockerCommand: string;
+  /** CLI command the user runs locally to link the daemon to this agent. */
+  linkCommand: string;
 };

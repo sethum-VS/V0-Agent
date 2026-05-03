@@ -113,7 +113,7 @@ export function ProvisionForm() {
       <CardHeader>
         <CardTitle className="text-lg font-medium">Provision New Worker</CardTitle>
         <p className="text-xs text-muted-foreground">
-          Runs a durable Vercel Workflow: SOUL.md generation → gateway-backed provisioning → Docker handoff.
+          Runs a durable Vercel Workflow: SOUL.md generation → gateway-backed provisioning → link command.
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -164,7 +164,9 @@ export function ProvisionForm() {
 
         {handoff && pollStatus === "completed" && (
           <div className="space-y-3 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3 text-sm">
-            <p className="font-medium text-emerald-600 dark:text-emerald-400">Completed — copy artifacts</p>
+            <p className="font-medium text-emerald-600 dark:text-emerald-400">
+              Provisioned — run the command below to connect your local daemon
+            </p>
 
             <div className="space-y-1">
               <div className="flex items-center justify-between gap-2">
@@ -191,15 +193,15 @@ export function ProvisionForm() {
 
             <div className="space-y-1">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs text-muted-foreground">Docker run</span>
+                <span className="text-xs text-muted-foreground">Link command</span>
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
                   className="h-7 gap-1 px-2"
-                  onClick={() => copyText("docker", handoff.dockerCommand)}
+                  onClick={() => copyText("link", handoff.linkCommand)}
                 >
-                  {copiedField === "docker" ? (
+                  {copiedField === "link" ? (
                     <Check className="h-3.5 w-3.5" />
                   ) : (
                     <Copy className="h-3.5 w-3.5" />
@@ -207,8 +209,8 @@ export function ProvisionForm() {
                   Copy
                 </Button>
               </div>
-              <pre className="overflow-x-auto rounded bg-background/80 p-2 text-xs leading-relaxed whitespace-pre-wrap">
-                {handoff.dockerCommand}
+              <pre className="overflow-x-auto rounded bg-background/80 p-2 text-xs leading-relaxed whitespace-pre-wrap font-mono">
+                {handoff.linkCommand}
               </pre>
             </div>
           </div>
