@@ -3,7 +3,6 @@
 import { useState, useRef, useEffect } from "react";
 import useSWR from "swr";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { X, Send, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AgentMessage } from "@/lib/db";
@@ -131,7 +130,8 @@ export function ChatSideOver({ agentId, agentName, isOpen, onClose }: ChatSideOv
         {/* Input */}
         <div className="border-t border-border/40 bg-gradient-to-t from-slate-950 to-slate-900/50 px-4 py-4 space-y-3">
           <div className="flex gap-2">
-            <Input
+            <input
+              type="text"
               placeholder="Type a message..."
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -142,7 +142,7 @@ export function ChatSideOver({ agentId, agentName, isOpen, onClose }: ChatSideOv
                 }
               }}
               disabled={sending}
-              className="bg-slate-900/50 border-border/40 text-sm"
+              className="flex h-9 w-full rounded-md border border-border/40 bg-slate-900/50 px-3 py-1 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
             />
             <Button
               size="icon"
