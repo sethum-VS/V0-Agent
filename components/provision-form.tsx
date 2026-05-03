@@ -5,13 +5,15 @@ import { useSWRConfig } from "swr";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Loader2, Copy, Check, Key, Sparkles, Terminal, Eye, EyeOff } from "lucide-react";
+import { Plus, Loader2, Copy, Check, Key, Sparkles, Terminal, Eye, EyeOff, Wand2, ChevronLeft, ChevronRight } from "lucide-react";
 import { startProvisionWorker } from "@/app/actions/provision-worker";
 import type { ProvisionHandoff } from "@/lib/provision-types";
 import { cn } from "@/lib/utils";
+import { FEATURED_TEMPLATES, type AgentTemplate } from "@/lib/templates";
 
 type PollStatus = "idle" | "queued" | "thinking" | "completed" | "failed";
 type ModelProvider = "system" | "byok";
+type StartingPoint = "custom" | AgentTemplate["id"];
 
 const SYSTEM_MODELS: { value: string; label: string; note: string }[] = [
   {
@@ -26,6 +28,22 @@ const SYSTEM_MODELS: { value: string; label: string; note: string }[] = [
   },
 ];
 
+const ACCENT_COLORS = {
+  blue: "border-blue-500/50 bg-blue-500/10 text-blue-400 shadow-[0_0_20px_rgba(59,130,246,0.2)]",
+  emerald: "border-emerald-500/50 bg-emerald-500/10 text-emerald-400 shadow-[0_0_20px_rgba(34,197,94,0.2)]",
+  amber: "border-amber-500/50 bg-amber-500/10 text-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.2)]",
+  purple: "border-purple-500/50 bg-purple-500/10 text-purple-400 shadow-[0_0_20px_rgba(168,85,247,0.2)]",
+  rose: "border-rose-500/50 bg-rose-500/10 text-rose-400 shadow-[0_0_20px_rgba(244,63,94,0.2)]",
+} as const;
+
+const ACCENT_HOVER = {
+  blue: "hover:border-blue-400/60 hover:bg-blue-500/15",
+  emerald: "hover:border-emerald-400/60 hover:bg-emerald-500/15",
+  amber: "hover:border-amber-400/60 hover:bg-amber-500/15",
+  purple: "hover:border-purple-400/60 hover:bg-purple-500/15",
+  rose: "hover:border-rose-400/60 hover:bg-rose-500/15",
+} as const;
+
 function mapApiStatus(
   status: string,
   prev: PollStatus,
@@ -39,6 +57,7 @@ function mapApiStatus(
 
 export function ProvisionForm() {
   const { mutate } = useSWRConfig();
+  const [startingPoint, setStartingPoint] = useState<StartingPoint>("custom");
   const [taskDescription, setTaskDescription] = useState("");
   const [modelProvider, setModelProvider] = useState<ModelProvider>("system");
   const [systemModel, setSystemModel] = useState(SYSTEM_MODELS[0].value);
@@ -49,6 +68,11 @@ export function ProvisionForm() {
   const [handoff, setHandoff] = useState<ProvisionHandoff | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const selectedTemplate = startingPoint !== "custom" 
+    ? FEATURED_TEMPLATES.find(t => t.id === startingPoint) 
+    : null;
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) {
@@ -69,14 +93,26 @@ export function ProvisionForm() {
     }
   };
 
+  const scrollTemplates = (direction: "left" | "right") => {
+    if (!scrollRef.current) return;
+    const scrollAmount = 200;
+    scrollRef.current.scrollBy({
+      left: direction === "left" ? -scrollAmount : scrollAmount,
+      behavior: "smooth",
+    });
+  };
+
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
     setHandoff(null);
     stopPolling();
 
-    const task = taskDescription.trim();
-    if (!task) return;
+    // Determine if using template or custom
+    const isTemplate = startingPoint !== "custom" && selectedTemplate;
+    const task = isTemplate ? selectedTemplate.name : taskDescription.trim();
+    
+    if (!isTemplate && !task) return;
 
     // Validate BYOK API key if selected
     if (modelProvider === "byok" && !apiKey.trim()) {
@@ -87,10 +123,11 @@ export function ProvisionForm() {
     setPollStatus("queued");
 
     const started = await startProvisionWorker(
-      task,
+      isTemplate ? `Deploy ${selectedTemplate.name} agent` : task,
       modelProvider,
       modelProvider === "byok" ? apiKey.trim() : undefined,
       modelProvider === "system" ? systemModel : undefined,
+      isTemplate ? selectedTemplate.githubRawUrl : undefined,
     );
     if (!started.ok) {
       setPollStatus("failed");
@@ -127,6 +164,7 @@ export function ProvisionForm() {
           stopPolling();
           setTaskDescription("");
           setApiKey("");
+          setStartingPoint("custom");
           // Refresh agents list to show updated status
           mutate("/api/agents");
         } else if (data.status === "failed" || data.status === "cancelled") {
@@ -145,6 +183,7 @@ export function ProvisionForm() {
   };
 
   const busy = pollStatus === "queued" || pollStatus === "thinking";
+  const canSubmit = startingPoint !== "custom" || taskDescription.trim();
 
   return (
     <Card className="border-border/50 bg-gradient-to-b from-card to-black/50 overflow-hidden">
@@ -156,24 +195,141 @@ export function ProvisionForm() {
           Provision New Worker
         </CardTitle>
         <p className="text-xs text-muted-foreground leading-relaxed">
-          Runs a durable workflow: SOUL.md generation, gateway-backed provisioning, and link command.
+          Choose a template for instant deployment or describe a custom agent.
         </p>
       </CardHeader>
 
       <CardContent className="space-y-5">
         <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="space-y-2">
+          
+          {/* Template Selection Section */}
+          <div className="space-y-3">
             <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              Task Description
+              Choose a Starting Point
             </label>
-            <Textarea
-              placeholder="Describe the task for the new worker agent..."
-              value={taskDescription}
-              onChange={(e) => setTaskDescription(e.target.value)}
-              className="min-h-[100px] resize-none bg-input/50 border-border/50 placeholder:text-muted-foreground/50 focus:border-ring focus:ring-1 focus:ring-ring transition-all"
-              disabled={busy}
-            />
+            
+            {/* Template carousel with scroll buttons */}
+            <div className="relative group/carousel">
+              {/* Left scroll button */}
+              <button
+                type="button"
+                onClick={() => scrollTemplates("left")}
+                className="absolute left-0 top-1/2 -translate-y-1/2 z-10 h-8 w-8 flex items-center justify-center rounded-full bg-background/90 border border-border/50 text-muted-foreground hover:text-foreground hover:bg-background transition-all opacity-0 group-hover/carousel:opacity-100 -translate-x-1/2"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              
+              {/* Scrollable container */}
+              <div
+                ref={scrollRef}
+                className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide scroll-smooth"
+                style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+              >
+                {/* Custom Agent Card */}
+                <button
+                  type="button"
+                  onClick={() => setStartingPoint("custom")}
+                  disabled={busy}
+                  className={cn(
+                    "flex-shrink-0 w-[140px] h-[120px] rounded-xl border p-3 text-left transition-all duration-300",
+                    startingPoint === "custom"
+                      ? "border-foreground/50 bg-foreground/10 text-foreground shadow-[0_0_20px_rgba(255,255,255,0.1)]"
+                      : "border-border/50 bg-secondary/20 text-muted-foreground hover:border-border hover:bg-secondary/40",
+                    "disabled:opacity-50 disabled:cursor-not-allowed"
+                  )}
+                >
+                  <div className={cn(
+                    "h-8 w-8 rounded-lg flex items-center justify-center mb-2 transition-colors",
+                    startingPoint === "custom" ? "bg-foreground/20" : "bg-secondary/50"
+                  )}>
+                    <Wand2 className="h-4 w-4" />
+                  </div>
+                  <div className="text-xs font-medium">Custom Agent</div>
+                  <div className="text-[10px] opacity-60 mt-0.5 line-clamp-2">
+                    Describe your own task
+                  </div>
+                </button>
+
+                {/* Template Cards */}
+                {FEATURED_TEMPLATES.map((template) => {
+                  const Icon = template.icon;
+                  const isSelected = startingPoint === template.id;
+                  return (
+                    <button
+                      key={template.id}
+                      type="button"
+                      onClick={() => setStartingPoint(template.id)}
+                      disabled={busy}
+                      className={cn(
+                        "flex-shrink-0 w-[140px] h-[120px] rounded-xl border p-3 text-left transition-all duration-300",
+                        isSelected
+                          ? ACCENT_COLORS[template.accentColor]
+                          : cn("border-border/50 bg-secondary/20 text-muted-foreground", ACCENT_HOVER[template.accentColor]),
+                        "disabled:opacity-50 disabled:cursor-not-allowed"
+                      )}
+                    >
+                      <div className={cn(
+                        "h-8 w-8 rounded-lg flex items-center justify-center mb-2 transition-colors",
+                        isSelected ? "bg-current/20" : "bg-secondary/50"
+                      )}>
+                        <Icon className="h-4 w-4" />
+                      </div>
+                      <div className="text-xs font-medium">{template.name}</div>
+                      <div className="text-[10px] opacity-60 mt-0.5 line-clamp-2">
+                        {template.description}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Right scroll button */}
+              <button
+                type="button"
+                onClick={() => scrollTemplates("right")}
+                className="absolute right-0 top-1/2 -translate-y-1/2 z-10 h-8 w-8 flex items-center justify-center rounded-full bg-background/90 border border-border/50 text-muted-foreground hover:text-foreground hover:bg-background transition-all opacity-0 group-hover/carousel:opacity-100 translate-x-1/2"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
           </div>
+
+          {/* Custom Task Description (only show when Custom is selected) */}
+          {startingPoint === "custom" && (
+            <div className="space-y-2 animate-fade-in">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Task Description
+              </label>
+              <Textarea
+                placeholder="Describe the task for the new worker agent..."
+                value={taskDescription}
+                onChange={(e) => setTaskDescription(e.target.value)}
+                className="min-h-[100px] resize-none bg-input/50 border-border/50 placeholder:text-muted-foreground/50 focus:border-ring focus:ring-1 focus:ring-ring transition-all"
+                disabled={busy}
+              />
+            </div>
+          )}
+
+          {/* Selected Template Preview */}
+          {selectedTemplate && (
+            <div className="rounded-lg border border-border/30 bg-secondary/10 px-4 py-3 animate-fade-in">
+              <div className="flex items-start gap-3">
+                <div className={cn(
+                  "h-10 w-10 rounded-lg flex items-center justify-center shrink-0",
+                  ACCENT_COLORS[selectedTemplate.accentColor].split(" ").slice(0, 2).join(" ")
+                )}>
+                  <selectedTemplate.icon className="h-5 w-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium text-foreground">{selectedTemplate.name}</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">{selectedTemplate.description}</div>
+                  <div className="text-[10px] text-muted-foreground/60 mt-1.5 font-mono truncate">
+                    {selectedTemplate.githubRawUrl.replace("https://raw.githubusercontent.com/", "")}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Model Configuration Section */}
           <div className="space-y-3">
@@ -293,7 +449,7 @@ export function ProvisionForm() {
               !busy && "bg-foreground text-background hover:bg-foreground/90",
               busy && "bg-secondary text-muted-foreground"
             )}
-            disabled={!taskDescription.trim() || busy}
+            disabled={!canSubmit || busy}
           >
             {busy ? (
               <>
@@ -303,7 +459,7 @@ export function ProvisionForm() {
             ) : (
               <>
                 <Plus className="h-4 w-4" />
-                Provision Worker
+                {selectedTemplate ? `Deploy ${selectedTemplate.name}` : "Provision Worker"}
               </>
             )}
           </Button>
@@ -324,7 +480,9 @@ export function ProvisionForm() {
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {pollStatus === "queued"
                     ? "Workflow run is starting..."
-                    : "Generating SOUL.md via AI Gateway..."}
+                    : selectedTemplate 
+                      ? "Fetching template from GitHub..."
+                      : "Generating SOUL.md via AI Gateway..."}
                 </p>
               </div>
             </div>

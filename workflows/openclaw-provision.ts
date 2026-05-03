@@ -63,6 +63,36 @@ function getDb() {
   return neon(process.env.DATABASE_URL!);
 }
 
+/**
+ * Fetches a SOUL.md template directly from GitHub.
+ * Bypasses the AI SDK entirely for pre-built templates.
+ */
+async function fetchTemplateStep(templateUrl: string) {
+  "use step";
+
+  console.log("[openclaw-provision] step fetchTemplate start", { templateUrl });
+
+  const response = await fetch(templateUrl, {
+    headers: {
+      "Accept": "text/plain",
+      "User-Agent": "OpenClaw-Command-Center/1.0",
+    },
+  });
+
+  if (!response.ok) {
+    throw new FatalError(`Failed to fetch template from GitHub: ${response.status} ${response.statusText}`);
+  }
+
+  const soulMd = await response.text();
+
+  if (!soulMd?.trim()) {
+    throw new FatalError("Template SOUL.md is empty");
+  }
+
+  console.log("[openclaw-provision] step fetchTemplate done", { length: soulMd.length });
+  return soulMd.trim();
+}
+
 async function generateSoulMdStep(
   userPrompt: string,
   providerType: ModelProviderType,
@@ -270,19 +300,33 @@ export async function openclawProvisionWorkflow(
   providerType: ModelProviderType = "system",
   encryptedApiKey: string | null = null,
   systemModel?: string,
+  templateUrl?: string,
 ) {
   "use workflow";
 
-  console.log("[openclaw-provision] workflow start", { agentId, userId, providerType, systemModel });
+  console.log("[openclaw-provision] workflow start", { agentId, userId, providerType, systemModel, templateUrl });
 
-  // Step 1: Generate the SOUL.md configuration
-  const soulMd = await generateSoulMdStep(userPrompt, providerType, encryptedApiKey, systemModel);
+  // Step 1: Get the SOUL.md - either from template or generate via AI
+  let soulMd: string;
+  
+  if (templateUrl) {
+    // Fetch pre-built template from GitHub - bypasses AI entirely
+    soulMd = await fetchTemplateStep(templateUrl);
+  } else {
+    // Generate via AI SDK
+    soulMd = await generateSoulMdStep(userPrompt, providerType, encryptedApiKey, systemModel);
+  }
 
   // Step 2: Persist the soul config to the database (user-scoped)
   await updateAgentSoulConfigStep(agentId, userId, soulMd);
 
-  // Step 3: Provision API tokens
-  const tokens = await provisionApiStep(userPrompt, providerType, encryptedApiKey, systemModel);
+  // Step 3: Provision API tokens (still uses AI for token generation)
+  const tokens = await provisionApiStep(
+    templateUrl ? "Template deployment" : userPrompt,
+    providerType,
+    encryptedApiKey,
+    systemModel
+  );
 
   // Step 4: Build the handoff payload (includes the openclaw link command)
   const handoff = await handoffStep(soulMd, tokens, agentId, providerType, encryptedApiKey);

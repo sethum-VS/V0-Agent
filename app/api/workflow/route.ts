@@ -10,6 +10,8 @@ interface WorkflowRequestBody {
   userId?: string;
   providerType?: ModelProviderType;
   encryptedApiKey?: string | null;
+  systemModel?: string;
+  templateUrl?: string;
 }
 
 export async function POST(request: Request) {
@@ -25,9 +27,12 @@ export async function POST(request: Request) {
   const userId = typeof body.userId === "string" ? body.userId : "";
   const providerType: ModelProviderType = body.providerType === "byok" ? "byok" : "system";
   const encryptedApiKey = body.encryptedApiKey ?? null;
+  const systemModel = typeof body.systemModel === "string" ? body.systemModel : undefined;
+  const templateUrl = typeof body.templateUrl === "string" ? body.templateUrl : undefined;
 
-  if (!task) {
-    return NextResponse.json({ error: "Missing string field: task" }, { status: 400 });
+  // Either task or templateUrl must be provided
+  if (!task && !templateUrl) {
+    return NextResponse.json({ error: "Missing task or templateUrl" }, { status: 400 });
   }
   if (!agentId) {
     return NextResponse.json({ error: "Missing string field: agentId" }, { status: 400 });
@@ -36,7 +41,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing string field: userId" }, { status: 400 });
   }
 
-  const run = await start(openclawProvisionWorkflow, [task, agentId, userId, providerType, encryptedApiKey]);
+  const run = await start(openclawProvisionWorkflow, [task, agentId, userId, providerType, encryptedApiKey, systemModel, templateUrl]);
   return NextResponse.json({ runId: run.runId });
 }
 
