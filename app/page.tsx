@@ -1,34 +1,16 @@
 import { Sidebar } from "@/components/sidebar";
 import { WorkerGrid } from "@/components/worker-grid";
 import { ProvisionForm } from "@/components/provision-form";
-import { Bot, Cpu, CheckCircle } from "lucide-react";
+import { DashboardStats } from "@/components/dashboard-stats";
+import { requireAuthOrRedirect } from "@/lib/auth";
 
-function StatCard({
-  label,
-  value,
-  icon: Icon,
-}: {
-  label: string;
-  value: string | number;
-  icon: React.ComponentType<{ className?: string }>;
-}) {
-  return (
-    <div className="flex items-center gap-4 rounded-lg border border-border bg-card p-4">
-      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary">
-        <Icon className="h-5 w-5 text-muted-foreground" />
-      </div>
-      <div>
-        <p className="text-2xl font-semibold text-foreground">{value}</p>
-        <p className="text-sm text-muted-foreground">{label}</p>
-      </div>
-    </div>
-  );
-}
+export default async function CommandCenter() {
+  // Protect this route - redirects to /sign-in if not authenticated
+  const user = await requireAuthOrRedirect();
 
-export default function CommandCenter() {
   return (
     <div className="flex h-screen">
-      <Sidebar />
+      <Sidebar userEmail={user.email} />
 
       <main className="flex-1 overflow-auto">
         <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-border bg-background/95 px-8 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -40,11 +22,7 @@ export default function CommandCenter() {
         </header>
 
         <div className="p-8">
-          <div className="mb-8 grid gap-4 sm:grid-cols-3">
-            <StatCard label="Total Workers" value={6} icon={Bot} />
-            <StatCard label="Active Tasks" value={2} icon={Cpu} />
-            <StatCard label="Completed Today" value={12} icon={CheckCircle} />
-          </div>
+          <DashboardStats />
 
           <div className="grid gap-8 lg:grid-cols-[1fr_320px]">
             <section>
