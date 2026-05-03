@@ -8,11 +8,10 @@ import { requireAuth } from "@/lib/auth";
  */
 export async function POST(
   request: Request,
-  { params }: { params: { id: string; msgId: string } }
+  { params }: { params: Promise<{ id: string; msgId: string }> }
 ) {
   const user = await requireAuth();
-  const agentId = params.id;
-  const msgId = params.msgId;
+  const { id: agentId, msgId } = await params;
 
   if (!agentId || !msgId) {
     return NextResponse.json(

@@ -9,10 +9,10 @@ import type { AgentMessage } from "@/lib/db";
  */
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const user = await requireAuth();
-  const agentId = params.id;
+  const { id: agentId } = await params;
 
   if (!agentId) {
     return NextResponse.json({ error: "Missing agentId" }, { status: 400 });
@@ -51,10 +51,10 @@ export async function GET(
  */
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const user = await requireAuth();
-  const agentId = params.id;
+  const { id: agentId } = await params;
 
   let body: { content?: string };
   try {
