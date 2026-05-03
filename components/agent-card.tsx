@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Bot, MoreHorizontal, Copy, Check, Loader2, Terminal, XCircle } from "lucide-react";
+import { Bot, MoreHorizontal, Copy, Check, Loader2, Terminal, XCircle, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Agent, AgentStatus } from "@/lib/db";
 
@@ -88,9 +88,11 @@ interface AgentCardProps {
   linkCommand?: string;
   /** Called when the user confirms cancellation — only provided for cancellable statuses */
   onCancel?: () => void;
+  /** Called to open the chat interface — only provided when status is online */
+  onChat?: () => void;
 }
 
-export function AgentCard({ agent, linkCommand, onCancel }: AgentCardProps) {
+export function AgentCard({ agent, linkCommand, onCancel, onChat }: AgentCardProps) {
   const [copiedLink, setCopiedLink] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -168,37 +170,52 @@ export function AgentCard({ agent, linkCommand, onCancel }: AgentCardProps) {
             )}
           </div>
         </div>
-        {/* 3-dot menu — only rendered when there are actions available */}
-        {onCancel && (
-          <div ref={menuRef} className="relative">
+        <div className="flex items-center gap-2">
+          {/* Chat button — only for online agents */}
+          {onChat && displayStatus === "online" && (
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 opacity-0 transition-opacity group-hover:opacity-100 text-muted-foreground hover:text-foreground"
-              onClick={() => setMenuOpen((v) => !v)}
-              disabled={cancelling}
-              aria-label="Agent options"
+              className="h-8 w-8 opacity-0 transition-opacity group-hover:opacity-100 text-muted-foreground hover:text-emerald-400"
+              onClick={onChat}
+              aria-label="Open chat"
             >
-              {cancelling ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <MoreHorizontal className="h-4 w-4" />
-              )}
+              <MessageSquare className="h-4 w-4" />
             </Button>
+          )}
 
-            {menuOpen && (
-              <div className="absolute right-0 top-9 z-50 min-w-[160px] overflow-hidden rounded-lg border border-border/60 bg-popover shadow-xl shadow-black/40 animate-fade-in">
-                <button
-                  className="flex w-full items-center gap-2.5 px-3 py-2.5 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
-                  onClick={handleCancel}
-                >
-                  <XCircle className="h-4 w-4 shrink-0" />
-                  Cancel request
-                </button>
-              </div>
-            )}
-          </div>
-        )}
+          {/* 3-dot menu — only rendered when there are actions available */}
+          {onCancel && (
+            <div ref={menuRef} className="relative">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 opacity-0 transition-opacity group-hover:opacity-100 text-muted-foreground hover:text-foreground"
+                onClick={() => setMenuOpen((v) => !v)}
+                disabled={cancelling}
+                aria-label="Agent options"
+              >
+                {cancelling ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <MoreHorizontal className="h-4 w-4" />
+                )}
+              </Button>
+
+              {menuOpen && (
+                <div className="absolute right-0 top-9 z-50 min-w-[160px] overflow-hidden rounded-lg border border-border/60 bg-popover shadow-xl shadow-black/40 animate-fade-in">
+                  <button
+                    className="flex w-full items-center gap-2.5 px-3 py-2.5 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
+                    onClick={handleCancel}
+                  >
+                    <XCircle className="h-4 w-4 shrink-0" />
+                    Cancel request
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </CardHeader>
 
       <CardContent className="relative space-y-4">

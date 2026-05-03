@@ -18,6 +18,7 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 
 const HEARTBEAT_INTERVAL_MS = 30_000;
+const MESSAGE_POLL_INTERVAL_MS = 5_000;
 const DEFAULT_ENDPOINT = "https://openclaw.vercel.app/api/agents";
 
 export interface ManagedBootOptions {
@@ -71,7 +72,42 @@ async function syncAgent(
   return (await res.json()) as SyncResponse;
 }
 
-async function sendHeartbeat(
+async function pollMessages(
+  endpoint: string,
+  agentId: string,
+  onUserMessage?: (content: string) => Promise<void>,
+): Promise<void> {
+  try {
+    const res = await fetch(`${endpoint}/${agentId}/messages`, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+    });
+    if (!res.ok) {
+      console.warn(`[openclaw] message poll non-2xx: ${res.status}`);
+      return;
+    }
+
+    const data = (await res.json()) as {
+      messages: Array<{
+        id: string;
+        role: "user" | "agent" | "system";
+        content: string;
+        is_read: boolean;
+      }>;
+    };
+
+    for (const msg of data.messages) {
+      if (!msg.is_read && msg.role === "user") {
+        console.log(`[openclaw] received user message: ${msg.content}`);
+        if (onUserMessage) {
+          await onUserMessage(msg.content);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("[openclaw] message poll error:", (err as Error).message);
+  }
+}
   endpoint: string,
   agentId: string,
   machineId: string,
@@ -115,14 +151,21 @@ export async function runManagedBoot(options: ManagedBootOptions): Promise<void>
     "utf8",
   );
 
-  // Step 4: start heartbeat loop. The heartbeat is the keep-alive for the
-  // dashboard's "online" indicator. The interval is purposefully short so the
-  // UI updates within a single dashboard poll cycle.
+  // Step 4: start heartbeat loop
   console.log("[openclaw] heartbeat loop starting");
   await sendHeartbeat(endpoint, agentId, machineId);
   setInterval(() => {
     void sendHeartbeat(endpoint, agentId, machineId);
   }, HEARTBEAT_INTERVAL_MS);
+
+  // Step 5: start message polling loop
+  console.log("[openclaw] message polling loop starting");
+  setInterval(() => {
+    void pollMessages(endpoint, agentId, async (content: string) => {
+      console.log(`[openclaw] processing user message: ${content}`);
+      // TODO: pass to the real OpenClaw runtime for inference
+    });
+  }, MESSAGE_POLL_INTERVAL_MS);
 
   // TODO: hand off to the real OpenClaw runtime, scoped to `sandboxDir`.
   // For the wrapper this is a no-op event loop keep-alive.

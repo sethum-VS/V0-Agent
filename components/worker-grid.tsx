@@ -1,8 +1,9 @@
 "use client";
 
 import useSWR, { useSWRConfig } from "swr";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { AgentCard } from "@/components/agent-card";
+import { ChatSideOver } from "@/components/chat-side-over";
 import { Loader2, Bot } from "lucide-react";
 import type { Agent } from "@/lib/db";
 
@@ -16,6 +17,8 @@ function buildLinkCommand(agentId: string): string {
 
 export function WorkerGrid() {
   const { mutate } = useSWRConfig();
+  const [chatOpen, setChatOpen] = useState(false);
+  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
 
   const cancelAgent = useCallback(async (agentId: string) => {
     await fetch(`/api/agents/${agentId}`, { method: "DELETE" });
@@ -70,23 +73,43 @@ export function WorkerGrid() {
   }
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-      {agents.map((agent) => (
-        <AgentCard
-          key={agent.id}
-          agent={agent}
-          linkCommand={
-            agent.status === "awaiting_connection"
-              ? buildLinkCommand(agent.id)
-              : undefined
-          }
-          onCancel={
-            agent.status === "provisioning" || agent.status === "awaiting_connection"
-              ? () => cancelAgent(agent.id)
-              : undefined
-          }
+    <>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {agents.map((agent) => (
+          <AgentCard
+            key={agent.id}
+            agent={agent}
+            linkCommand={
+              agent.status === "awaiting_connection"
+                ? buildLinkCommand(agent.id)
+                : undefined
+            }
+            onCancel={
+              agent.status === "provisioning" || agent.status === "awaiting_connection"
+                ? () => cancelAgent(agent.id)
+                : undefined
+            }
+            onChat={
+              agent.status === "online"
+                ? () => {
+                    setSelectedAgent(agent);
+                    setChatOpen(true);
+                  }
+                : undefined
+            }
+          />
+        ))}
+      </div>
+
+      {/* Chat slide-over */}
+      {selectedAgent && (
+        <ChatSideOver
+          agentId={selectedAgent.id}
+          agentName={selectedAgent.name}
+          isOpen={chatOpen}
+          onClose={() => setChatOpen(false)}
         />
-      ))}
-    </div>
+      )}
+    </>
   );
 }
