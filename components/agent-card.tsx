@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Bot, MoreHorizontal, Copy, Check, Loader2, Terminal } from "lucide-react";
+import { Bot, MoreHorizontal, Copy, Check, Loader2, Terminal, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Agent, AgentStatus } from "@/lib/db";
 
@@ -86,13 +86,41 @@ interface AgentCardProps {
   agent: Agent;
   /** Link command to display when awaiting_connection */
   linkCommand?: string;
+  /** Called when the user confirms cancellation — only provided for cancellable statuses */
+  onCancel?: () => void;
 }
 
-export function AgentCard({ agent, linkCommand }: AgentCardProps) {
+export function AgentCard({ agent, linkCommand, onCancel }: AgentCardProps) {
   const [copiedLink, setCopiedLink] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const displayStatus = computeDisplayStatus(agent);
   const config = statusConfigs[displayStatus];
   const timeSince = formatTimeSince(agent.last_heartbeat);
+
+  // Close menu on outside click
+  useEffect(() => {
+    if (!menuOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [menuOpen]);
+
+  const handleCancel = async () => {
+    if (!onCancel) return;
+    setCancelling(true);
+    setMenuOpen(false);
+    try {
+      await onCancel();
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   const copyLinkCommand = async () => {
     if (!linkCommand) return;
@@ -140,13 +168,37 @@ export function AgentCard({ agent, linkCommand }: AgentCardProps) {
             )}
           </div>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 opacity-0 transition-opacity group-hover:opacity-100 text-muted-foreground hover:text-foreground"
-        >
-          <MoreHorizontal className="h-4 w-4" />
-        </Button>
+        {/* 3-dot menu — only rendered when there are actions available */}
+        {onCancel && (
+          <div ref={menuRef} className="relative">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 opacity-0 transition-opacity group-hover:opacity-100 text-muted-foreground hover:text-foreground"
+              onClick={() => setMenuOpen((v) => !v)}
+              disabled={cancelling}
+              aria-label="Agent options"
+            >
+              {cancelling ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <MoreHorizontal className="h-4 w-4" />
+              )}
+            </Button>
+
+            {menuOpen && (
+              <div className="absolute right-0 top-9 z-50 min-w-[160px] overflow-hidden rounded-lg border border-border/60 bg-popover shadow-xl shadow-black/40 animate-fade-in">
+                <button
+                  className="flex w-full items-center gap-2.5 px-3 py-2.5 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
+                  onClick={handleCancel}
+                >
+                  <XCircle className="h-4 w-4 shrink-0" />
+                  Cancel request
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </CardHeader>
 
       <CardContent className="relative space-y-4">

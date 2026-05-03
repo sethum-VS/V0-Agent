@@ -1,6 +1,7 @@
 "use client";
 
-import useSWR from "swr";
+import useSWR, { useSWRConfig } from "swr";
+import { useCallback } from "react";
 import { AgentCard } from "@/components/agent-card";
 import { Loader2, Bot } from "lucide-react";
 import type { Agent } from "@/lib/db";
@@ -14,6 +15,13 @@ function buildLinkCommand(agentId: string): string {
 }
 
 export function WorkerGrid() {
+  const { mutate } = useSWRConfig();
+
+  const cancelAgent = useCallback(async (agentId: string) => {
+    await fetch(`/api/agents/${agentId}`, { method: "DELETE" });
+    mutate("/api/agents");
+  }, [mutate]);
+
   const { data, error, isLoading } = useSWR<{ agents: Agent[] }>(
     "/api/agents",
     fetcher,
@@ -70,6 +78,11 @@ export function WorkerGrid() {
           linkCommand={
             agent.status === "awaiting_connection"
               ? buildLinkCommand(agent.id)
+              : undefined
+          }
+          onCancel={
+            agent.status === "provisioning" || agent.status === "awaiting_connection"
+              ? () => cancelAgent(agent.id)
               : undefined
           }
         />
