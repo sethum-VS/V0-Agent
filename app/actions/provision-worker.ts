@@ -10,7 +10,8 @@ import { encryptKey } from "@/lib/encryption";
 export async function startProvisionWorker(
   taskDescription: string,
   modelProviderType: ModelProviderType = "system",
-  apiKey?: string
+  apiKey?: string,
+  systemModel?: string,
 ) {
   // Enforce authentication - throws if no user
   const user = await requireAuth();
@@ -46,6 +47,7 @@ export async function startProvisionWorker(
     user.id,
     modelProviderType,
     encryptedKey,
+    systemModel,
   ]);
 
   return { ok: true as const, runId: run.runId, agentId: agent.id };

@@ -24,8 +24,13 @@ const gateway = createGateway({
   apiKey: process.env.AI_GATEWAY_API_KEY,
 });
 
-/** Designated model routed through the Vercel AI Gateway. */
-const SYSTEM_MODEL = gateway("openai/gpt-5.5");
+/** Default system model — used when no explicit model is chosen. */
+const DEFAULT_SYSTEM_MODEL = "google/gemini-2.5-flash-lite";
+
+/** Resolve the gateway model to use. Falls back to the default if not supplied. */
+function resolveSystemModel(modelString?: string) {
+  return gateway(modelString ?? DEFAULT_SYSTEM_MODEL);
+}
 
 
 
@@ -42,8 +47,12 @@ const SYSTEM_MODEL = gateway("openai/gpt-5.5");
  * Parameters are kept on the call sites so that future changes (e.g. routing
  * a specific step through BYOK) only need to update this function.
  */
-function getModel(_providerType: ModelProviderType, _encryptedApiKey: string | null) {
-  return SYSTEM_MODEL;
+function getModel(
+  _providerType: ModelProviderType,
+  _encryptedApiKey: string | null,
+  systemModel?: string,
+) {
+  return resolveSystemModel(systemModel);
 }
 
 /**
@@ -57,13 +66,14 @@ function getDb() {
 async function generateSoulMdStep(
   userPrompt: string,
   providerType: ModelProviderType,
-  encryptedApiKey: string | null
+  encryptedApiKey: string | null,
+  systemModel?: string,
 ) {
   "use step";
 
-  console.log("[openclaw-provision] step generateSoulMd start");
+  console.log("[openclaw-provision] step generateSoulMd start", { systemModel });
 
-  const model = getModel(providerType, encryptedApiKey);
+  const model = getModel(providerType, encryptedApiKey, systemModel);
 
   const { text } = await generateText({
     model,
@@ -129,13 +139,14 @@ async function updateAgentSoulConfigStep(
 async function provisionApiStep(
   userPrompt: string,
   providerType: ModelProviderType,
-  encryptedApiKey: string | null
+  encryptedApiKey: string | null,
+  systemModel?: string,
 ) {
   "use step";
 
   console.log("[openclaw-provision] step provisionApi start");
 
-  const model = getModel(providerType, encryptedApiKey);
+  const model = getModel(providerType, encryptedApiKey, systemModel);
   const maxAttempts = 4;
   let lastError: unknown;
 
@@ -257,20 +268,21 @@ export async function openclawProvisionWorkflow(
   agentId: string,
   userId: string,
   providerType: ModelProviderType = "system",
-  encryptedApiKey: string | null = null
+  encryptedApiKey: string | null = null,
+  systemModel?: string,
 ) {
   "use workflow";
 
-  console.log("[openclaw-provision] workflow start", { agentId, userId, providerType });
+  console.log("[openclaw-provision] workflow start", { agentId, userId, providerType, systemModel });
 
   // Step 1: Generate the SOUL.md configuration
-  const soulMd = await generateSoulMdStep(userPrompt, providerType, encryptedApiKey);
+  const soulMd = await generateSoulMdStep(userPrompt, providerType, encryptedApiKey, systemModel);
 
   // Step 2: Persist the soul config to the database (user-scoped)
   await updateAgentSoulConfigStep(agentId, userId, soulMd);
 
   // Step 3: Provision API tokens
-  const tokens = await provisionApiStep(userPrompt, providerType, encryptedApiKey);
+  const tokens = await provisionApiStep(userPrompt, providerType, encryptedApiKey, systemModel);
 
   // Step 4: Build the handoff payload (includes the openclaw link command)
   const handoff = await handoffStep(soulMd, tokens, agentId, providerType, encryptedApiKey);
