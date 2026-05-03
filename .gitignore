@@ -3,3 +3,14 @@ node_modules
 .next
 .vercel
 .DS_Store
+
+# Compiled OpenClaw daemon binaries (large; rebuilt on demand)
+public/openclaw-mac
+public/openclaw-mac-x64
+
+# Daemon workspace
+daemon/node_modules
+daemon/dist
+
+# Local sandbox data created by the daemon at runtime
+.openclaw/
