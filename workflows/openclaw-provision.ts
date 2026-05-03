@@ -1,6 +1,7 @@
 import { generateObject, generateText, APICallError, createGateway } from "ai";
 import { z } from "zod";
 import { FatalError } from "workflow";
+import { neon } from "@neondatabase/serverless";
 import type { ProvisionHandoff } from "@/lib/provision-types";
 
 const tokenSchema = z.object({
@@ -23,6 +24,14 @@ const gateway = createGateway({
 
 /** Designated model routed through the Vercel AI Gateway. */
 const GATEWAY_MODEL = gateway("openai/gpt-5.5");
+
+/**
+ * Database client for workflow steps.
+ * We create it lazily inside steps to ensure DATABASE_URL is available.
+ */
+function getDb() {
+  return neon(process.env.DATABASE_URL!);
+}
 
 async function generateSoulMdStep(userPrompt: string) {
   "use step";
@@ -65,6 +74,29 @@ ${userPrompt}
 
   console.log("[openclaw-provision] step generateSoulMd done");
   return text.trim();
+}
+
+/**
+ * Updates the agent record with the generated SOUL.md configuration.
+ * Scoped by both agentId AND userId to enforce tenant isolation.
+ */
+async function updateAgentSoulConfigStep(
+  agentId: string,
+  userId: string,
+  soulConfig: string
+) {
+  "use step";
+
+  console.log("[openclaw-provision] step updateAgentSoulConfig start");
+
+  const sql = getDb();
+  await sql`
+    UPDATE agents
+    SET soul_config = ${soulConfig}, updated_at = now()
+    WHERE id = ${agentId} AND user_id = ${userId}
+  `;
+
+  console.log("[openclaw-provision] step updateAgentSoulConfig done");
 }
 
 async function provisionApiStep(userPrompt: string) {
@@ -114,6 +146,29 @@ ${userPrompt}
   throw lastError instanceof Error ? lastError : new Error("provisionApi failed");
 }
 
+/**
+ * Marks the agent as ready for daemon connection.
+ * Scoped by both agentId AND userId to enforce tenant isolation.
+ */
+async function updateAgentStatusStep(
+  agentId: string,
+  userId: string,
+  status: "provisioning" | "awaiting_connection" | "online" | "offline"
+) {
+  "use step";
+
+  console.log(`[openclaw-provision] step updateAgentStatus -> ${status}`);
+
+  const sql = getDb();
+  await sql`
+    UPDATE agents
+    SET status = ${status}, updated_at = now()
+    WHERE id = ${agentId} AND user_id = ${userId}
+  `;
+
+  console.log("[openclaw-provision] step updateAgentStatus done");
+}
+
 async function handoffStep(
   soulMd: string,
   tokens: z.infer<typeof tokenSchema>,
@@ -141,14 +196,29 @@ async function handoffStep(
   return payload;
 }
 
-export async function openclawProvisionWorkflow(userPrompt: string) {
+export async function openclawProvisionWorkflow(
+  userPrompt: string,
+  agentId: string,
+  userId: string
+) {
   "use workflow";
 
-  console.log("[openclaw-provision] workflow start");
+  console.log("[openclaw-provision] workflow start", { agentId, userId });
 
+  // Step 1: Generate the SOUL.md configuration
   const soulMd = await generateSoulMdStep(userPrompt);
+
+  // Step 2: Persist the soul config to the database (user-scoped)
+  await updateAgentSoulConfigStep(agentId, userId, soulMd);
+
+  // Step 3: Provision API tokens
   const tokens = await provisionApiStep(userPrompt);
+
+  // Step 4: Build the handoff payload
   const handoff = await handoffStep(soulMd, tokens);
+
+  // Step 5: Mark agent as ready for daemon connection (user-scoped)
+  await updateAgentStatusStep(agentId, userId, "awaiting_connection");
 
   console.log("[openclaw-provision] workflow complete");
   return handoff;
