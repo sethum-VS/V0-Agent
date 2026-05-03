@@ -1,4 +1,4 @@
-import { generateObject, generateText, APICallError } from "ai";
+import { generateObject, generateText, APICallError, createGateway } from "ai";
 import { z } from "zod";
 import { FatalError } from "workflow";
 import type { ProvisionHandoff } from "@/lib/provision-types";
@@ -9,8 +9,20 @@ const tokenSchema = z.object({
   webhookSecret: z.string().min(1),
 });
 
-/** Model id routes through Vercel AI Gateway when deployed on Vercel or when OIDC/key is configured. */
-const GATEWAY_MODEL = "openai/gpt-5.4";
+/**
+ * Explicit Vercel AI Gateway provider.
+ *
+ * On Vercel, the SDK can authenticate via the ambient OIDC token. For CI,
+ * non-Vercel hosts, or when we want to pin to a specific gateway key, we pass
+ * AI_GATEWAY_API_KEY explicitly. If the env var is unset, `apiKey` is left
+ * undefined and the SDK falls back to OIDC.
+ */
+const gateway = createGateway({
+  apiKey: process.env.AI_GATEWAY_API_KEY,
+});
+
+/** Designated model routed through the Vercel AI Gateway. */
+const GATEWAY_MODEL = gateway("openai/gpt-5.5");
 
 async function generateSoulMdStep(userPrompt: string) {
   "use step";
