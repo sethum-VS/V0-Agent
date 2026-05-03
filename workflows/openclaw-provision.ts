@@ -1,5 +1,4 @@
 import { generateObject, generateText, APICallError, createGateway } from "ai";
-import { createOpenAI } from "@ai-sdk/openai";
 import { z } from "zod";
 import { FatalError } from "workflow";
 import { neon } from "@neondatabase/serverless";
@@ -43,16 +42,19 @@ function decryptApiKey(encryptedKey: string): string {
 }
 
 /**
- * Get the appropriate model based on provider type.
- * For BYOK, creates an OpenAI provider with the user's key.
- * For system, uses the shared AI Gateway.
+ * Get the model used by the provisioning workflow.
+ *
+ * The cloud-side provisioning workflow always uses the system AI Gateway —
+ * even for BYOK agents — because generating SOUL.md is internal infrastructure
+ * work, not user-attributable inference. The user's BYOK key is stored
+ * encrypted and surfaced to the local daemon at runtime via the handoff
+ * payload, so all *runtime* inference (the actual agent doing work) bills
+ * against the user's key.
+ *
+ * Parameters are kept on the call sites so that future changes (e.g. routing
+ * a specific step through BYOK) only need to update this function.
  */
-function getModel(providerType: ModelProviderType, encryptedApiKey: string | null) {
-  if (providerType === "byok" && encryptedApiKey) {
-    const apiKey = decryptApiKey(encryptedApiKey);
-    const openai = createOpenAI({ apiKey });
-    return openai("gpt-4o");
-  }
+function getModel(_providerType: ModelProviderType, _encryptedApiKey: string | null) {
   return SYSTEM_MODEL;
 }
 
