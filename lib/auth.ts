@@ -14,11 +14,18 @@ export async function getCurrentUser(): Promise<{ id: string; email?: string } |
   const cookieStore = await cookies();
   const userId = cookieStore.get("user_id")?.value;
 
-  if (!userId) {
-    return null;
+  if (userId) {
+    return { id: userId };
   }
 
-  return { id: userId };
+  // In non-production, return a deterministic dev user so the workflow can
+  // be tested without a full auth system in place. Remove or gate this once
+  // real auth (Stack Auth, Clerk, etc.) is wired up.
+  if (process.env.NODE_ENV !== "production") {
+    return { id: "dev-user-00000000", email: "dev@localhost" };
+  }
+
+  return null;
 }
 
 /**
