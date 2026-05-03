@@ -12,6 +12,19 @@ import type { ProvisionHandoff } from "@/lib/provision-types";
 type PollStatus = "idle" | "queued" | "thinking" | "completed" | "failed";
 type ModelProvider = "system" | "byok";
 
+const SYSTEM_MODELS: { value: string; label: string; note: string }[] = [
+  {
+    value: "google/gemini-2.5-flash-lite",
+    label: "Gemini 2.5 Flash Lite",
+    note: "Fastest · cheapest",
+  },
+  {
+    value: "openai/gpt-5.5",
+    label: "GPT-5.5",
+    note: "Most capable",
+  },
+];
+
 function mapApiStatus(
   status: string,
   prev: PollStatus,
@@ -27,6 +40,7 @@ export function ProvisionForm() {
   const { mutate } = useSWRConfig();
   const [taskDescription, setTaskDescription] = useState("");
   const [modelProvider, setModelProvider] = useState<ModelProvider>("system");
+  const [systemModel, setSystemModel] = useState(SYSTEM_MODELS[0].value);
   const [apiKey, setApiKey] = useState("");
   const [pollStatus, setPollStatus] = useState<PollStatus>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -73,7 +87,8 @@ export function ProvisionForm() {
     const started = await startProvisionWorker(
       task,
       modelProvider,
-      modelProvider === "byok" ? apiKey.trim() : undefined
+      modelProvider === "byok" ? apiKey.trim() : undefined,
+      modelProvider === "system" ? systemModel : undefined,
     );
     if (!started.ok) {
       setPollStatus("failed");
@@ -178,6 +193,32 @@ export function ProvisionForm() {
                 Your Key
               </button>
             </div>
+
+            {modelProvider === "system" && (
+              <div className="space-y-1">
+                <label htmlFor="systemModel" className="text-xs text-muted-foreground">
+                  Model
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {SYSTEM_MODELS.map((m) => (
+                    <button
+                      key={m.value}
+                      type="button"
+                      onClick={() => setSystemModel(m.value)}
+                      disabled={busy}
+                      className={`flex flex-col items-start rounded-md border px-3 py-2 text-left text-xs transition-colors ${
+                        systemModel === m.value
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border bg-secondary/50 text-muted-foreground hover:bg-secondary"
+                      } disabled:opacity-50`}
+                    >
+                      <span className="font-medium">{m.label}</span>
+                      <span className="opacity-70">{m.note}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {modelProvider === "byok" && (
               <div className="space-y-2">
