@@ -32,11 +32,12 @@ export async function startProvisionWorker(
   const encryptedKey = apiKey ? encryptKey(apiKey) : null;
 
   // Insert the agent record with 'provisioning' status
-  const [agent] = await sql<{ id: string }[]>`
+  const rows = (await sql`
     INSERT INTO agents (user_id, name, task_description, status, model_provider_type, encrypted_api_key)
     VALUES (${user.id}, ${agentName}, ${trimmed}, 'provisioning', ${modelProviderType}, ${encryptedKey})
     RETURNING id
-  `;
+  `) as { id: string }[];
+  const agent = rows[0];
 
   // Start the workflow, passing the agent ID and BYOK info for status updates
   const run = await start(openclawProvisionWorkflow, [

@@ -33,9 +33,9 @@ export async function POST(req: NextRequest) {
 
   const { agentId, machineId } = body as { agentId: string; machineId: string };
 
-  const agents = await sql<Agent[]>`
+  const agents = (await sql`
     SELECT * FROM agents WHERE id = ${agentId} LIMIT 1
-  `;
+  `) as Agent[];
 
   if (agents.length === 0) {
     return NextResponse.json({ error: "Agent not found" }, { status: 404 });
