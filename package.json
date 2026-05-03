@@ -12,7 +12,14 @@
   "jest": {
     "testEnvironment": "node",
     "transform": {
-      "^.+\\.tsx?$": ["ts-jest", { "tsconfig": { "module": "commonjs" } }]
+      "^.+\\.tsx?$": [
+        "ts-jest",
+        {
+          "tsconfig": {
+            "module": "commonjs"
+          }
+        }
+      ]
     },
     "moduleNameMapper": {
       "^@/(.*)$": "<rootDir>/$1"
@@ -28,6 +35,7 @@
     "next": "^16.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "swr": "^2.4.1",
     "tailwind-merge": "^3.5.0",
     "tailwindcss": "^4.2.4",
     "tailwindcss-animate": "^1.0.7",

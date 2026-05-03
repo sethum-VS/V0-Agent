@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useSWRConfig } from "swr";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -22,6 +23,7 @@ function mapApiStatus(
 }
 
 export function ProvisionForm() {
+  const { mutate } = useSWRConfig();
   const [taskDescription, setTaskDescription] = useState("");
   const [pollStatus, setPollStatus] = useState<PollStatus>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -69,6 +71,9 @@ export function ProvisionForm() {
     const { runId } = started;
     setPollStatus("thinking");
 
+    // Immediately refresh the agents list to show the new provisioning agent
+    mutate("/api/agents");
+
     const tick = async () => {
       try {
         const res = await fetch(`/api/workflow?runId=${encodeURIComponent(runId)}`);
@@ -91,6 +96,8 @@ export function ProvisionForm() {
           setHandoff(data.result);
           stopPolling();
           setTaskDescription("");
+          // Refresh agents list to show updated status
+          mutate("/api/agents");
         } else if (data.status === "failed" || data.status === "cancelled") {
           setError("Workflow did not complete successfully. Check server logs or run `npx workflow inspect runs`.");
           stopPolling();
