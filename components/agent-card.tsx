@@ -1,10 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { useState, useRef, useEffect } from "react";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Bot, MoreHorizontal, Copy, Check, Loader2 } from "lucide-react";
+import { Bot, MoreHorizontal, Copy, Check, Loader2, Terminal, XCircle, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Agent, AgentStatus } from "@/lib/db";
 
@@ -15,35 +14,46 @@ interface StatusConfig {
   label: string;
   color: string;
   bgColor: string;
+  borderColor: string;
   dotColor: string;
-  animate?: boolean;
+  glowColor: string;
+  animate?: "pulse" | "breathe";
 }
 
 const statusConfigs: Record<DisplayStatus, StatusConfig> = {
   provisioning: {
     label: "Thinking",
     color: "text-amber-400",
-    bgColor: "bg-amber-400/10",
+    bgColor: "bg-amber-500/10",
+    borderColor: "border-amber-500/30",
     dotColor: "bg-amber-400",
-    animate: true,
+    glowColor: "shadow-[0_0_12px_rgba(251,191,36,0.4)]",
+    animate: "pulse",
   },
   awaiting_connection: {
     label: "Awaiting Link",
     color: "text-blue-400",
-    bgColor: "bg-blue-400/10",
+    bgColor: "bg-blue-500/10",
+    borderColor: "border-blue-500/30",
     dotColor: "bg-blue-400",
+    glowColor: "shadow-[0_0_12px_rgba(59,130,246,0.4)]",
   },
   online: {
     label: "System Online",
     color: "text-emerald-400",
-    bgColor: "bg-emerald-400/10",
+    bgColor: "bg-emerald-500/10",
+    borderColor: "border-emerald-500/30",
     dotColor: "bg-emerald-400",
+    glowColor: "shadow-[0_0_12px_rgba(34,197,94,0.4)]",
+    animate: "breathe",
   },
   offline: {
     label: "Offline",
     color: "text-red-400",
-    bgColor: "bg-red-400/10",
+    bgColor: "bg-red-500/10",
+    borderColor: "border-red-500/30",
     dotColor: "bg-red-400",
+    glowColor: "shadow-[0_0_12px_rgba(239,68,68,0.3)]",
   },
 };
 
@@ -76,13 +86,43 @@ interface AgentCardProps {
   agent: Agent;
   /** Link command to display when awaiting_connection */
   linkCommand?: string;
+  /** Called when the user confirms cancellation — only provided for cancellable statuses */
+  onCancel?: () => void;
+  /** Called to open the chat interface — only provided when status is online */
+  onChat?: () => void;
 }
 
-export function AgentCard({ agent, linkCommand }: AgentCardProps) {
+export function AgentCard({ agent, linkCommand, onCancel, onChat }: AgentCardProps) {
   const [copiedLink, setCopiedLink] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const displayStatus = computeDisplayStatus(agent);
   const config = statusConfigs[displayStatus];
   const timeSince = formatTimeSince(agent.last_heartbeat);
+
+  // Close menu on outside click
+  useEffect(() => {
+    if (!menuOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [menuOpen]);
+
+  const handleCancel = async () => {
+    if (!onCancel) return;
+    setCancelling(true);
+    setMenuOpen(false);
+    try {
+      await onCancel();
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   const copyLinkCommand = async () => {
     if (!linkCommand) return;
@@ -96,73 +136,151 @@ export function AgentCard({ agent, linkCommand }: AgentCardProps) {
   };
 
   return (
-    <Card className="group transition-colors hover:border-muted-foreground/50">
-      <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-3">
+    <Card className="group relative overflow-hidden border-border/50 bg-gradient-to-b from-card to-black/50 transition-all duration-300 hover:border-border hover:shadow-lg hover:shadow-black/20 card-glow animate-fade-in">
+      {/* Subtle gradient overlay */}
+      <div className="absolute inset-0 bg-gradient-to-br from-white/[0.02] to-transparent pointer-events-none" />
+      
+      <CardHeader className="relative flex flex-row items-start justify-between space-y-0 pb-3">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary">
+          <div className={cn(
+            "flex h-11 w-11 items-center justify-center rounded-xl border transition-all duration-300",
+            displayStatus === "provisioning" 
+              ? "bg-amber-500/10 border-amber-500/30" 
+              : displayStatus === "online"
+              ? "bg-emerald-500/10 border-emerald-500/30"
+              : "bg-secondary border-border"
+          )}>
             {displayStatus === "provisioning" ? (
               <Loader2 className="h-5 w-5 text-amber-400 animate-spin" />
             ) : (
-              <Bot className="h-5 w-5 text-muted-foreground" />
+              <Bot className={cn(
+                "h-5 w-5 transition-colors",
+                displayStatus === "online" ? "text-emerald-400" : "text-muted-foreground"
+              )} />
             )}
           </div>
           <div>
-            <CardTitle className="text-base font-medium">{agent.name}</CardTitle>
+            <h3 className="text-sm font-semibold text-foreground tracking-tight">
+              {agent.name}
+            </h3>
             {displayStatus === "online" && timeSince && (
-              <p className="text-xs text-muted-foreground">Last seen {timeSince}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Last seen {timeSince}
+              </p>
             )}
           </div>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 opacity-0 transition-opacity group-hover:opacity-100"
-        >
-          <MoreHorizontal className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* Chat button — only for online agents */}
+          {onChat && displayStatus === "online" && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 opacity-0 transition-opacity group-hover:opacity-100 text-muted-foreground hover:text-emerald-400"
+              onClick={onChat}
+              aria-label="Open chat"
+            >
+              <MessageSquare className="h-4 w-4" />
+            </Button>
+          )}
+
+          {/* 3-dot menu — only rendered when there are actions available */}
+          {onCancel && (
+            <div ref={menuRef} className="relative">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 opacity-0 transition-opacity group-hover:opacity-100 text-muted-foreground hover:text-foreground"
+                onClick={() => setMenuOpen((v) => !v)}
+                disabled={cancelling}
+                aria-label="Agent options"
+              >
+                {cancelling ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <MoreHorizontal className="h-4 w-4" />
+                )}
+              </Button>
+
+              {menuOpen && (
+                <div className="absolute right-0 top-9 z-50 min-w-[160px] overflow-hidden rounded-lg border border-border/60 bg-popover shadow-xl shadow-black/40 animate-fade-in">
+                  <button
+                    className="flex w-full items-center gap-2.5 px-3 py-2.5 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
+                    onClick={handleCancel}
+                  >
+                    <XCircle className="h-4 w-4 shrink-0" />
+                    Cancel request
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </CardHeader>
-      <CardContent className="space-y-3">
-        <p className="line-clamp-2 text-sm text-muted-foreground">
+
+      <CardContent className="relative space-y-4">
+        <p className="line-clamp-2 text-sm text-muted-foreground leading-relaxed">
           {agent.task_description}
         </p>
 
-        <Badge
-          variant="secondary"
-          className={cn("gap-1.5 border-0", config.bgColor, config.color)}
-        >
+        {/* Premium status badge */}
+        <div className={cn(
+          "inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium border transition-all",
+          config.bgColor,
+          config.borderColor,
+          config.color
+        )}>
           <span
             className={cn(
-              "h-1.5 w-1.5 rounded-full",
+              "h-2 w-2 rounded-full",
               config.dotColor,
-              config.animate && "animate-pulse"
+              config.animate === "pulse" && "animate-pulse",
+              config.animate === "breathe" && "animate-breathe",
+              config.glowColor
             )}
           />
           {config.label}
-        </Badge>
+        </div>
 
-        {/* Show link command for agents awaiting connection */}
+        {/* MacOS-style terminal for link command */}
         {displayStatus === "awaiting_connection" && linkCommand && (
-          <div className="mt-2 space-y-1">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs text-muted-foreground">Link command</span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-6 gap-1 px-2 text-xs"
-                onClick={copyLinkCommand}
-              >
-                {copiedLink ? (
-                  <Check className="h-3 w-3" />
-                ) : (
-                  <Copy className="h-3 w-3" />
-                )}
-                Copy
-              </Button>
+          <div className="mt-4 terminal-block overflow-hidden">
+            {/* Terminal header dots */}
+            <div className="terminal-dots">
+              <div className="terminal-dot terminal-dot-red" />
+              <div className="terminal-dot terminal-dot-yellow" />
+              <div className="terminal-dot terminal-dot-green" />
             </div>
-            <pre className="overflow-x-auto rounded bg-secondary/50 p-2 text-xs leading-relaxed whitespace-pre-wrap font-mono">
-              {linkCommand}
-            </pre>
+            
+            {/* Terminal content */}
+            <div className="pt-9 pb-3 px-4">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <Terminal className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  <code className="text-xs text-emerald-400 font-mono break-all leading-relaxed">
+                    {linkCommand}
+                  </code>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className={cn(
+                    "h-7 w-7 p-0 shrink-0 transition-all",
+                    copiedLink 
+                      ? "text-emerald-400 bg-emerald-500/10" 
+                      : "text-muted-foreground hover:text-foreground hover:bg-white/5"
+                  )}
+                  onClick={copyLinkCommand}
+                >
+                  {copiedLink ? (
+                    <Check className="h-3.5 w-3.5" />
+                  ) : (
+                    <Copy className="h-3.5 w-3.5" />
+                  )}
+                </Button>
+              </div>
+            </div>
           </div>
         )}
       </CardContent>

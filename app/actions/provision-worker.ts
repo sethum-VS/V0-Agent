@@ -12,13 +12,14 @@ export async function startProvisionWorker(
   modelProviderType: ModelProviderType = "system",
   apiKey?: string,
   systemModel?: string,
+  templateUrl?: string,
 ) {
   // Enforce authentication - throws if no user
   const user = await requireAuth();
 
   const trimmed = taskDescription.trim();
-  if (!trimmed) {
-    return { ok: false as const, error: "Task description is required." };
+  if (!trimmed && !templateUrl) {
+    return { ok: false as const, error: "Task description or template is required." };
   }
 
   // Validate BYOK requires API key
@@ -35,7 +36,7 @@ export async function startProvisionWorker(
   // Insert the agent record with 'provisioning' status
   const rows = (await sql`
     INSERT INTO agents (user_id, name, task_description, status, model_provider_type, encrypted_api_key)
-    VALUES (${user.id}, ${agentName}, ${trimmed}, 'provisioning', ${modelProviderType}, ${encryptedKey})
+    VALUES (${user.id}, ${agentName}, ${trimmed || "Template deployment"}, 'provisioning', ${modelProviderType}, ${encryptedKey})
     RETURNING id
   `) as { id: string }[];
   const agent = rows[0];
@@ -48,6 +49,7 @@ export async function startProvisionWorker(
     modelProviderType,
     encryptedKey,
     systemModel,
+    templateUrl,
   ]);
 
   return { ok: true as const, runId: run.runId, agentId: agent.id };

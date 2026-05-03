@@ -27,3 +27,16 @@ export interface Agent {
   created_at: Date;
   updated_at: Date;
 }
+
+/** Message role in agent communication */
+export type MessageRole = "user" | "agent" | "system";
+
+/** Agent message row type */
+export interface AgentMessage {
+  id: string;
+  agent_id: string;
+  role: MessageRole;
+  content: string;
+  created_at: Date;
+  is_read: boolean;
+}
