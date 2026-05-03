@@ -9,6 +9,9 @@ export const sql = neon(process.env.DATABASE_URL!);
 /** Agent status enum matching the database CHECK constraint */
 export type AgentStatus = "provisioning" | "awaiting_connection" | "online" | "offline";
 
+/** Model provider type: 'system' uses the shared AI Gateway, 'byok' uses user's own key */
+export type ModelProviderType = "system" | "byok";
+
 /** Agent row type matching the agents table schema */
 export interface Agent {
   id: string;
@@ -19,6 +22,8 @@ export interface Agent {
   status: AgentStatus;
   machine_id: string | null;
   last_heartbeat: Date | null;
+  model_provider_type: ModelProviderType;
+  encrypted_api_key: string | null;
   created_at: Date;
   updated_at: Date;
 }

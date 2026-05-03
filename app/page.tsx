@@ -2,11 +2,15 @@ import { Sidebar } from "@/components/sidebar";
 import { WorkerGrid } from "@/components/worker-grid";
 import { ProvisionForm } from "@/components/provision-form";
 import { DashboardStats } from "@/components/dashboard-stats";
+import { requireAuthOrRedirect } from "@/lib/auth";
 
-export default function CommandCenter() {
+export default async function CommandCenter() {
+  // Protect this route - redirects to /sign-in if not authenticated
+  const user = await requireAuthOrRedirect();
+
   return (
     <div className="flex h-screen">
-      <Sidebar />
+      <Sidebar userEmail={user.email} />
 
       <main className="flex-1 overflow-auto">
         <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-border bg-background/95 px-8 backdrop-blur supports-[backdrop-filter]:bg-background/60">

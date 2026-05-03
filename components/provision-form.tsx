@@ -5,11 +5,12 @@ import { useSWRConfig } from "swr";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Loader2, Copy, Check } from "lucide-react";
+import { Plus, Loader2, Copy, Check, Key, Sparkles } from "lucide-react";
 import { startProvisionWorker } from "@/app/actions/provision-worker";
 import type { ProvisionHandoff } from "@/lib/provision-types";
 
 type PollStatus = "idle" | "queued" | "thinking" | "completed" | "failed";
+type ModelProvider = "system" | "byok";
 
 function mapApiStatus(
   status: string,
@@ -25,6 +26,8 @@ function mapApiStatus(
 export function ProvisionForm() {
   const { mutate } = useSWRConfig();
   const [taskDescription, setTaskDescription] = useState("");
+  const [modelProvider, setModelProvider] = useState<ModelProvider>("system");
+  const [apiKey, setApiKey] = useState("");
   const [pollStatus, setPollStatus] = useState<PollStatus>("idle");
   const [error, setError] = useState<string | null>(null);
   const [handoff, setHandoff] = useState<ProvisionHandoff | null>(null);
@@ -59,9 +62,19 @@ export function ProvisionForm() {
     const task = taskDescription.trim();
     if (!task) return;
 
+    // Validate BYOK API key if selected
+    if (modelProvider === "byok" && !apiKey.trim()) {
+      setError("Please enter your OpenAI API key");
+      return;
+    }
+
     setPollStatus("queued");
 
-    const started = await startProvisionWorker(task);
+    const started = await startProvisionWorker(
+      task,
+      modelProvider,
+      modelProvider === "byok" ? apiKey.trim() : undefined
+    );
     if (!started.ok) {
       setPollStatus("failed");
       setError(started.error);
@@ -96,6 +109,7 @@ export function ProvisionForm() {
           setHandoff(data.result);
           stopPolling();
           setTaskDescription("");
+          setApiKey("");
           // Refresh agents list to show updated status
           mutate("/api/agents");
         } else if (data.status === "failed" || data.status === "cancelled") {
@@ -129,9 +143,63 @@ export function ProvisionForm() {
             placeholder="Describe the task for the new worker agent..."
             value={taskDescription}
             onChange={(e) => setTaskDescription(e.target.value)}
-            className="min-h-[120px] resize-none bg-secondary/50"
+            className="min-h-[100px] resize-none bg-secondary/50"
             disabled={busy}
           />
+
+          {/* Model Configuration Section */}
+          <div className="space-y-3">
+            <p className="text-sm font-medium text-foreground">Model Configuration</p>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setModelProvider("system")}
+                disabled={busy}
+                className={`flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
+                  modelProvider === "system"
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border bg-secondary/50 text-muted-foreground hover:bg-secondary"
+                } disabled:opacity-50`}
+              >
+                <Sparkles className="h-4 w-4" />
+                Demo AI
+              </button>
+              <button
+                type="button"
+                onClick={() => setModelProvider("byok")}
+                disabled={busy}
+                className={`flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
+                  modelProvider === "byok"
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border bg-secondary/50 text-muted-foreground hover:bg-secondary"
+                } disabled:opacity-50`}
+              >
+                <Key className="h-4 w-4" />
+                Your Key
+              </button>
+            </div>
+
+            {modelProvider === "byok" && (
+              <div className="space-y-2">
+                <label htmlFor="apiKey" className="text-xs text-muted-foreground">
+                  OpenAI API Key
+                </label>
+                <input
+                  id="apiKey"
+                  type="password"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder="sk-..."
+                  disabled={busy}
+                  className="w-full rounded-md border border-border bg-secondary/50 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Your key is encrypted and only used by this agent.
+                </p>
+              </div>
+            )}
+          </div>
+
           <Button
             type="submit"
             className="w-full gap-2"
@@ -140,7 +208,7 @@ export function ProvisionForm() {
             {busy ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                {pollStatus === "queued" ? "Queued…" : "Provisioning…"}
+                {pollStatus === "queued" ? "Queued..." : "Provisioning..."}
               </>
             ) : (
               <>
@@ -159,7 +227,7 @@ export function ProvisionForm() {
             {" — "}
             {pollStatus === "queued"
               ? "Workflow run is starting."
-              : "Generating SOUL.md and provisioning tokens via AI Gateway…"}
+              : "Generating SOUL.md and provisioning tokens via AI Gateway..."}
           </div>
         )}
 

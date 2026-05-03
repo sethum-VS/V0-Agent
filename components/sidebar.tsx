@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -8,6 +9,8 @@ import {
   Activity,
   History,
   Zap,
+  LogOut,
+  User,
 } from "lucide-react";
 
 const navigation = [
@@ -21,7 +24,19 @@ const bottomNav = [
   { name: "Settings", icon: Settings },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  userEmail?: string;
+}
+
+export function Sidebar({ userEmail }: SidebarProps) {
+  const router = useRouter();
+
+  const handleSignOut = async () => {
+    await fetch("/api/auth/sign-out", { method: "POST" });
+    router.push("/sign-in");
+    router.refresh();
+  };
+
   return (
     <aside className="flex h-screen w-64 flex-col border-r border-border bg-card">
       <div className="flex h-16 items-center gap-2 border-b border-border px-6">
@@ -56,7 +71,7 @@ export function Sidebar() {
         ))}
       </nav>
 
-      <div className="border-t border-border p-4">
+      <div className="border-t border-border p-4 space-y-2">
         {bottomNav.map((item) => (
           <a
             key={item.name}
@@ -67,6 +82,28 @@ export function Sidebar() {
             {item.name}
           </a>
         ))}
+
+        {userEmail && (
+          <div className="pt-2 border-t border-border">
+            <div className="flex items-center gap-3 px-3 py-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary">
+                <User className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground truncate">
+                  {userEmail}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleSignOut}
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+            >
+              <LogOut className="h-4 w-4" />
+              Sign Out
+            </button>
+          </div>
+        )}
       </div>
     </aside>
   );
