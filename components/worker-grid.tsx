@@ -9,10 +9,10 @@ import type { Agent } from "@/lib/db";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
-/** Derive the link command from agent id + current origin */
+/** Derive the one-line install/link command from agent id + current origin */
 function buildLinkCommand(agentId: string): string {
   const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
-  return `openclaw link --agent-id ${agentId} --endpoint ${baseUrl}/api/agents`;
+  return `curl -fsSL "${baseUrl}/install.sh?agentId=${agentId}" | bash`;
 }
 
 export function WorkerGrid() {
