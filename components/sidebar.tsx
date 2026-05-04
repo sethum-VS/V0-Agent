@@ -15,22 +15,27 @@ import {
 } from "lucide-react";
 
 const navigation = [
-  { name: "Overview", icon: LayoutDashboard, current: true },
-  { name: "Workers", icon: Bot, current: false },
-  { name: "Activity", icon: Activity, current: false },
-  { name: "History", icon: History, current: false },
+  { name: "Overview", icon: LayoutDashboard, href: "/" },
+  { name: "Workers", icon: Bot, href: "/workers" },
+  { name: "Activity", icon: Activity, href: "#" },
+  { name: "History", icon: History, href: "#" },
 ];
 
 const bottomNav = [
-  { name: "Settings", icon: Settings },
+  { name: "Settings", icon: Settings, href: "#" },
 ];
 
 interface SidebarProps {
   userEmail?: string;
+  currentPage?: "overview" | "workers" | "activity" | "history";
 }
 
-export function Sidebar({ userEmail }: SidebarProps) {
+export function Sidebar({ userEmail, currentPage = "overview" }: SidebarProps) {
   const router = useRouter();
+
+  const isCurrentPage = (name: string) => {
+    return name.toLowerCase() === currentPage;
+  };
 
   const handleSignOut = async () => {
     await fetch("/api/auth/sign-out", { method: "POST" });
@@ -60,30 +65,33 @@ export function Sidebar({ userEmail }: SidebarProps) {
             Main Menu
           </span>
         </div>
-        {navigation.map((item) => (
-          <a
-            key={item.name}
-            href="#"
-            className={cn(
-              "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
-              item.current
-                ? "bg-secondary/80 text-foreground"
-                : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
-            )}
-          >
-            {item.current && (
-              <div className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-foreground" />
-            )}
-            <item.icon className={cn(
-              "h-4 w-4 transition-colors",
-              item.current ? "text-foreground" : "text-muted-foreground group-hover:text-foreground"
-            )} />
-            {item.name}
-            {item.current && (
-              <ChevronRight className="ml-auto h-3 w-3 text-muted-foreground" />
-            )}
-          </a>
-        ))}
+        {navigation.map((item) => {
+          const isCurrent = isCurrentPage(item.name);
+          return (
+            <a
+              key={item.name}
+              href={item.href}
+              className={cn(
+                "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
+                isCurrent
+                  ? "bg-secondary/80 text-foreground"
+                  : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
+              )}
+            >
+              {isCurrent && (
+                <div className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-foreground" />
+              )}
+              <item.icon className={cn(
+                "h-4 w-4 transition-colors",
+                isCurrent ? "text-foreground" : "text-muted-foreground group-hover:text-foreground"
+              )} />
+              {item.name}
+              {isCurrent && (
+                <ChevronRight className="ml-auto h-3 w-3 text-muted-foreground" />
+              )}
+            </a>
+          );
+        })}
       </nav>
 
       {/* Bottom section */}
@@ -91,7 +99,7 @@ export function Sidebar({ userEmail }: SidebarProps) {
         {bottomNav.map((item) => (
           <a
             key={item.name}
-            href="#"
+            href={item.href}
             className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-all duration-200 hover:bg-secondary/50 hover:text-foreground"
           >
             <item.icon className="h-4 w-4" />

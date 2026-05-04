@@ -10,7 +10,7 @@ export default async function CommandCenter() {
 
   return (
     <div className="flex h-screen bg-background">
-      <Sidebar userEmail={user.email} />
+      <Sidebar userEmail={user.email} currentPage="overview" />
 
       <main className="flex-1 overflow-auto bg-grid-pattern">
         {/* Premium header with gradient border */}
