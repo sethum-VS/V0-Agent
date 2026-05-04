@@ -38,29 +38,38 @@ ENDPOINT="${baseUrl}/api/agents"
 OPENCLAW_DIR="$HOME/.openclaw"
 LOG_FILE="$OPENCLAW_DIR/daemon.log"
 
+# Ensure Bun path is always available
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
+
 echo "Installing OpenClaw for Agent $AGENT_ID..."
 
 # 1. Check for Bun (required runtime)
 if ! command -v bun &> /dev/null; then
   echo "Bun is not installed. Installing Bun..."
   curl -fsSL https://bun.sh/install | bash
-  export BUN_INSTALL="$HOME/.bun"
-  export PATH="$BUN_INSTALL/bin:$PATH"
+  # Source the updated PATH
+  source "$HOME/.bashrc" 2>/dev/null || source "$HOME/.zshrc" 2>/dev/null || true
 fi
 
-# 2. Create openclaw directory and clone/update daemon
-mkdir -p "$OPENCLAW_DIR"
-cd "$OPENCLAW_DIR"
+# Verify bun is available
+BUN_PATH="$BUN_INSTALL/bin/bun"
+if [ ! -f "$BUN_PATH" ]; then
+  BUN_PATH=$(which bun 2>/dev/null || echo "")
+fi
+if [ -z "$BUN_PATH" ] || [ ! -f "$BUN_PATH" ]; then
+  echo "Error: Bun installation failed. Please install Bun manually: curl -fsSL https://bun.sh/install | bash"
+  exit 1
+fi
 
-if [ -d "daemon" ]; then
-  echo "Updating OpenClaw daemon..."
-  cd daemon && git pull --quiet 2>/dev/null || true
-else
-  echo "Downloading OpenClaw daemon..."
-  git clone --depth 1 https://github.com/openclaw/openclaw.git daemon 2>/dev/null || {
-    # Fallback: create minimal managed daemon inline
-    mkdir -p daemon/src
-    cat > daemon/package.json << 'PKGJSON'
+echo "Using Bun at: $BUN_PATH"
+
+# 2. Create openclaw directory and daemon
+mkdir -p "$OPENCLAW_DIR/daemon/src"
+cd "$OPENCLAW_DIR/daemon"
+
+# Always write fresh daemon files to ensure latest version
+cat > package.json << 'PKGJSON'
 {
   "name": "openclaw-daemon",
   "version": "1.0.0",
@@ -68,7 +77,10 @@ else
   "scripts": { "start": "bun run src/index.ts" }
 }
 PKGJSON
-    cat > daemon/src/index.ts << 'DAEMONTS'
+
+cat > src/index.ts << 'DAEMONTS'
+import { hostname } from "os";
+
 const args = process.argv.slice(2);
 const agentIdIdx = args.indexOf("--managed");
 const endpointIdx = args.indexOf("--endpoint");
@@ -80,63 +92,86 @@ if (!agentId || !endpoint) {
   process.exit(1);
 }
 
+const machineId = hostname() + "-" + process.pid;
+
 console.log("[openclaw] Starting managed daemon for agent:", agentId);
+console.log("[openclaw] Machine ID:", machineId);
+console.log("[openclaw] Endpoint:", endpoint);
 
-// Sync with server
+// Sync with server (include machineId)
+console.log("[openclaw] Syncing with server...");
 const syncRes = await fetch(endpoint + "/sync", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ agentId }),
-});
-if (!syncRes.ok) {
-  console.error("[openclaw] Sync failed:", syncRes.status);
-  process.exit(1);
-}
-const config = await syncRes.json();
-console.log("[openclaw] Synced. Soul config received.");
-
-// Heartbeat loop
-const machineId = require("os").hostname() + "-" + process.pid;
-setInterval(async () => {
-  try {
-    await fetch(endpoint + "/heartbeat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ agentId, machineId }),
-    });
-    console.log("[openclaw] Heartbeat sent");
-  } catch (e) {
-    console.error("[openclaw] Heartbeat failed:", e.message);
-  }
-}, 30000);
-
-// Initial heartbeat
-await fetch(endpoint + "/heartbeat", {
   method: "POST",
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify({ agentId, machineId }),
 });
-console.log("[openclaw] Daemon online. Listening for messages...");
+if (!syncRes.ok) {
+  const errText = await syncRes.text();
+  console.error("[openclaw] Sync failed:", syncRes.status, errText);
+  process.exit(1);
+}
+const config = await syncRes.json();
+console.log("[openclaw] Synced successfully. Soul config received.");
 
-// Keep alive
-setInterval(() => {}, 1000);
-DAEMONTS
+// Initial heartbeat
+console.log("[openclaw] Sending initial heartbeat...");
+const hbRes = await fetch(endpoint + "/heartbeat", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ agentId, machineId }),
+});
+if (hbRes.ok) {
+  console.log("[openclaw] Initial heartbeat sent successfully.");
+} else {
+  console.error("[openclaw] Initial heartbeat failed:", hbRes.status);
+}
+
+console.log("[openclaw] Daemon online. Starting heartbeat loop (every 30s)...");
+
+// Heartbeat loop
+setInterval(async () => {
+  try {
+    const res = await fetch(endpoint + "/heartbeat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ agentId, machineId }),
+    });
+    if (res.ok) {
+      console.log("[openclaw] Heartbeat sent at", new Date().toISOString());
+    } else {
+      console.error("[openclaw] Heartbeat failed:", res.status);
+    }
+  } catch (e: any) {
+    console.error("[openclaw] Heartbeat error:", e.message);
   }
-  cd daemon
-fi
+}, 30000);
 
-# 3. Install dependencies
-echo "Installing dependencies..."
-bun install --silent 2>/dev/null || true
+// Keep process alive
+process.on("SIGINT", () => {
+  console.log("[openclaw] Shutting down...");
+  process.exit(0);
+});
+DAEMONTS
 
-# 4. Launch the daemon detached
+# 3. Launch the daemon detached using absolute path to bun
 echo "Booting background daemon..."
-nohup bun run src/index.ts --managed "$AGENT_ID" --endpoint "$ENDPOINT" >> "$LOG_FILE" 2>&1 &
+nohup "$BUN_PATH" run src/index.ts --managed "$AGENT_ID" --endpoint "$ENDPOINT" >> "$LOG_FILE" 2>&1 &
 disown || true
 
+# Give it a moment to start
+sleep 2
+
 echo ""
-echo "OpenClaw is now running silently in the background."
+echo "OpenClaw is now running in the background."
 echo "Logs: $LOG_FILE"
+echo ""
+echo "Checking daemon status..."
+if pgrep -f "openclaw-daemon" > /dev/null || pgrep -f "$AGENT_ID" > /dev/null; then
+  echo "Daemon process is running."
+else
+  echo "Note: Daemon may still be starting. Check logs if dashboard doesn't update."
+fi
+echo ""
 echo "Open your dashboard to confirm the agent is online."
 `;
 
