@@ -1,13 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "deploymentProtection": {
-    "paths": [
-      {
-        "path": "/install.sh",
-        "allowWithoutAuth": true
-      }
-    ]
-  },
   "headers": [
     {
       "source": "/install.sh",
