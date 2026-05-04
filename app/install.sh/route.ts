@@ -110,7 +110,9 @@ if (!syncRes.ok) {
   console.error("[openclaw] Sync failed:", syncRes.status, errText);
   process.exit(1);
 }
-const config = await syncRes.json();
+const config = await syncRes.json() as { soulConfig?: string; taskDescription?: string };
+const soulConfig = config.soulConfig || "";
+const taskDescription = config.taskDescription || "You are a helpful AI assistant.";
 console.log("[openclaw] Synced successfully. Soul config received.");
 
 // Initial heartbeat
@@ -126,9 +128,61 @@ if (hbRes.ok) {
   console.error("[openclaw] Initial heartbeat failed:", hbRes.status);
 }
 
-console.log("[openclaw] Daemon online. Starting heartbeat loop (every 30s)...");
+console.log("[openclaw] Daemon online. Starting loops...");
 
-// Heartbeat loop
+// Simple AI response using server-side inference endpoint
+async function generateResponse(userMessage: string): Promise<string> {
+  try {
+    // Call the server's inference endpoint which handles AI
+    const res = await fetch(endpoint + "/" + agentId + "/infer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: userMessage, soulConfig, taskDescription }),
+    });
+    if (res.ok) {
+      const data = await res.json() as { response: string };
+      return data.response;
+    } else {
+      console.error("[openclaw] Inference failed:", res.status);
+      return "I apologize, but I encountered an error processing your request.";
+    }
+  } catch (e: any) {
+    console.error("[openclaw] Inference error:", e.message);
+    return "I apologize, but I'm currently unable to respond. Please try again later.";
+  }
+}
+
+// Message polling loop (every 5 seconds)
+setInterval(async () => {
+  try {
+    const res = await fetch(endpoint + "/" + agentId + "/daemon/messages");
+    if (!res.ok) {
+      console.error("[openclaw] Message poll failed:", res.status);
+      return;
+    }
+    const data = await res.json() as { messages: Array<{ id: string; content: string }> };
+    
+    for (const msg of data.messages) {
+      console.log("[openclaw] Processing message:", msg.id, msg.content);
+      
+      // Generate AI response
+      const response = await generateResponse(msg.content);
+      
+      // Post response back
+      await fetch(endpoint + "/" + agentId + "/daemon/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: response, replyToId: msg.id }),
+      });
+      
+      console.log("[openclaw] Replied to message:", msg.id);
+    }
+  } catch (e: any) {
+    console.error("[openclaw] Message loop error:", e.message);
+  }
+}, 5000);
+
+// Heartbeat loop (every 30 seconds)
 setInterval(async () => {
   try {
     const res = await fetch(endpoint + "/heartbeat", {
