@@ -242,43 +242,51 @@ export function AgentCard({ agent, linkCommand, onCancel, onChat }: AgentCardPro
           {config.label}
         </div>
 
-        {/* MacOS-style terminal for link command */}
+        {/* Single-step installation for awaiting_connection */}
         {displayStatus === "awaiting_connection" && linkCommand && (
-          <div className="mt-4 terminal-block overflow-hidden">
-            {/* Terminal header dots */}
-            <div className="terminal-dots">
-              <div className="terminal-dot terminal-dot-red" />
-              <div className="terminal-dot terminal-dot-yellow" />
-              <div className="terminal-dot terminal-dot-green" />
-            </div>
-            
-            {/* Terminal content */}
-            <div className="pt-9 pb-3 px-4">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0 flex-1">
-                  <Terminal className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                  <code className="text-xs text-emerald-400 font-mono break-all leading-relaxed">
-                    {linkCommand}
-                  </code>
+          <div className="mt-4 space-y-3">
+            {/* Helper text */}
+            <p className="text-xs text-muted-foreground italic">
+              Run this single command in your Mac terminal to install and link your agent.
+            </p>
+
+            {/* Installation Command */}
+            <div className="terminal-block overflow-hidden">
+              {/* Terminal header dots */}
+              <div className="terminal-dots">
+                <div className="terminal-dot terminal-dot-red" />
+                <div className="terminal-dot terminal-dot-yellow" />
+                <div className="terminal-dot terminal-dot-green" />
+              </div>
+              
+              {/* Terminal content */}
+              <div className="pt-9 pb-3 px-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <Terminal className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    <code className="text-xs text-emerald-400 font-mono break-all leading-relaxed">
+                      {linkCommand}
+                    </code>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className={cn(
+                      "h-7 w-7 p-0 shrink-0 transition-all",
+                      copiedLink 
+                        ? "text-emerald-400 bg-emerald-500/10" 
+                        : "text-muted-foreground hover:text-foreground hover:bg-white/5"
+                    )}
+                    onClick={copyLinkCommand}
+                  >
+                    {copiedLink ? (
+                      <Check className="h-3.5 w-3.5" />
+                    ) : (
+                      <Copy className="h-3.5 w-3.5" />
+                    )}
+                  </Button>
                 </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className={cn(
-                    "h-7 w-7 p-0 shrink-0 transition-all",
-                    copiedLink 
-                      ? "text-emerald-400 bg-emerald-500/10" 
-                      : "text-muted-foreground hover:text-foreground hover:bg-white/5"
-                  )}
-                  onClick={copyLinkCommand}
-                >
-                  {copiedLink ? (
-                    <Check className="h-3.5 w-3.5" />
-                  ) : (
-                    <Copy className="h-3.5 w-3.5" />
-                  )}
-                </Button>
               </div>
             </div>
           </div>

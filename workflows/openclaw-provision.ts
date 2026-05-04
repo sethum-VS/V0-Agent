@@ -260,8 +260,9 @@ async function handoffStep(
       ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
       : process.env.NEXTAUTH_URL ?? "http://localhost:3000";
 
-  // Build link command
-  let linkCommand = `openclaw link --agent-id ${agentId} --endpoint ${baseUrl}/api/agents`;
+  // Dynamic curl command that includes agentId as a query parameter
+  // The install.sh script will parse this and execute silently without user input
+  const linkCommand = `curl -fsSL "${baseUrl}/install.sh?agentId=${agentId}" | bash`;
 
   // If BYOK, inject the user's API key into the SOUL.md configuration
   let finalSoulMd = soulMd;
