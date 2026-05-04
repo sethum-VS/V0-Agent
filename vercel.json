@@ -1,6 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "x-vercel-protection-bypass": "public-install-routes",
   "headers": [
     {
       "source": "/install.sh",
