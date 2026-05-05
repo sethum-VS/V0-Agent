@@ -112,53 +112,64 @@ Daemon endpoints (`/daemon/messages`, `/infer`) do **not** require user session 
 
 ## System Interconnectivity
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     Vercel Cloud (Next.js)                       │
-│                                                                   │
-│  ┌────────────────────┐      ┌────────────────────────────────┐ │
-│  │  Web Dashboard     │      │  API Layer                     │ │
-│  │  (React / Next.js) │      │  /api/agents/[id]/             │ │
-│  │                    │      │  - messages       (user ←→ DB) │ │
-│  │  • Overview        │◄─────┤  - daemon/messages (daemon ←→) │ │
-│  │  • Workers config  │      │  - infer          (AI calls)   │ │
-│  │  • Chat panel      │      │  - sync           (provision)  │ │
-│  │  • Provision form  │      │  - heartbeat      (liveness)   │ │
-│  └────────────────────┘      │                                │ │
-│           │                  │  Database: Neon PostgreSQL    │ │
-│           │                  │  Files: Vercel Blob           │ │
-│           │                  └────────────────────────────────┘ │
-│           │                            ▲                        │
-│           │                            │                        │
-│           │          Vercel AI Gateway (OpenAI GPT-4o-mini)     │
-│           │                            │                        │
-└───────────┼────────────────────────────┼────────────────────────┘
-            │                            │
-            │                            │
-            │                ┌───────────▼──────────┐
-            │                │  AI Model (OpenAI)   │
-            │                └───────────────────────┘
-            │
-            │ (1) Install script download
-            │ (2) Heartbeats & polling
-            │ (3) Chat messages, config sync
-            │
-            ▼
-┌──────────────────────────────────────────────────────────────┐
-│                   User's Mac (Local Daemon)                  │
-│                                                               │
-│  ┌─────────────────────────────────────────────────────────┐ │
-│  │  Bun Daemon (TypeScript runtime)                        │ │
-│  │  ~/.openclaw/daemon/src/index.ts                        │ │
-│  │                                                          │ │
-│  │  • Sync: Fetch soul config from cloud                  │ │
-│  │  • Loop: Poll /daemon/messages every 5s                │ │
-│  │  • Process: For each message:                          │ │
-│  │    1. Call /infer (cloud) with message + config        │ │
-│  │    2. Post response back to /daemon/messages           │ │
-│  │  • Heartbeat: Send machine ID every 30s                │ │
-│  └─────────────────────────────────────────────────────────┘ │
-└──────────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    %% Vercel Cloud Subgraph
+    subgraph VercelCloud ["Vercel Cloud (Next.js)"]
+        
+        Dashboard["Web Dashboard<br/>(React / Next.js)<br/>---------------------<br/>• Overview<br/>• Workers config<br/>• Chat panel<br/>• Provision form"]
+        
+        subgraph APILayer ["API Layer (/api/agents/[id]/)"]
+            EP_Messages["/messages<br/>(user ↔ DB)"]
+            EP_DaemonMsg["/daemon/messages<br/>(daemon ↔)"]
+            EP_Infer["/infer<br/>(AI calls)"]
+            EP_Sync["/sync<br/>(provision)"]
+            EP_Heartbeat["/heartbeat<br/>(liveness)"]
+        end
+
+        subgraph Storage ["Storage Layer"]
+            DB[("Neon PostgreSQL<br/>(Database)")]
+            Blob[("Vercel Blob<br/>(Files/Configs)")]
+        end
+
+        AIGateway["Vercel AI Gateway<br/>(GPT-4o-mini)"]
+    end
+
+    %% External API
+    OpenAI{"OpenAI Model"}
+
+    %% Local User Environment Subgraph
+    subgraph UserMac ["User's Mac (Local Machine)"]
+        Daemon["⚡ Bun Daemon<br/>(~/.openclaw/daemon/src/index.ts)<br/>---------------------<br/>• Sync: Fetch soul config<br/>• Loop: Poll /daemon/messages (5s)<br/>• Process: Call /infer & Post response<br/>• Heartbeat: Send machine ID (30s)"]
+    end
+
+    %% Internal Cloud Routing
+    Dashboard -->|"POST user messages<br/>GET SWR polls"| EP_Messages
+    EP_Messages <-->|"Read/Write chat state"| DB
+    EP_DaemonMsg <-->|"Read unread/Write answers"| DB
+    EP_Sync <-->|"Read agent config"| Blob
+    EP_Infer <-->|"Route prompt"| AIGateway
+    AIGateway <-->|"Generate response"| OpenAI
+
+    %% Web to Daemon Interconnectivity (The Data Flow)
+    Daemon -.->|"1. Download install script"| VercelCloud
+    Daemon <-->|"2. Fetch soul config (Sync)"| EP_Sync
+    Daemon -->|"3. Send machine ID (Every 30s)"| EP_Heartbeat
+    Daemon <-->|"4. Poll unread messages /<br/>Post responses (Every 5s)"| EP_DaemonMsg
+    Daemon <-->|"5. Send msg + config /<br/>Receive AI response"| EP_Infer
+
+    %% Styling
+    classDef cloud fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#fff;
+    classDef api fill:#1e293b,stroke:#8b5cf6,stroke-width:2px,color:#fff;
+    classDef db fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#fff;
+    classDef local fill:#171717,stroke:#f59e0b,stroke-width:2px,color:#fff;
+    classDef ai fill:#4c1d95,stroke:#c084fc,stroke-width:2px,color:#fff;
+
+    class VercelCloud cloud;
+    class Dashboard,APILayer,EP_Messages,EP_DaemonMsg,EP_Infer,EP_Sync,EP_Heartbeat api;
+    class Storage,DB,Blob db;
+    class UserMac,Daemon local;
+    class AIGateway,OpenAI ai;
 ```
 
 ### Data Flow Example
