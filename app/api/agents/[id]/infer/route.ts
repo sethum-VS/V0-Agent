@@ -80,7 +80,6 @@ Be helpful, concise, and professional in your responses.`;
       model: gateway("openai/gpt-4o-mini"),
       system: systemPrompt,
       messages,
-      maxTokens: 1024,
     });
 
     return NextResponse.json({ response: result.text });
