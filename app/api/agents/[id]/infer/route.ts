@@ -5,7 +5,7 @@ import { generateText } from "ai";
 /**
  * POST /api/agents/[id]/infer
  * Server-side AI inference endpoint for daemon to call
- * This runs on the server where AI Gateway credentials are available
+ * Uses Vercel AI Gateway to route to the configured model provider
  */
 export async function POST(
   request: Request,
@@ -49,19 +49,22 @@ export async function POST(
   }
 
   const agent = agents[0];
+  
+  console.log(`[infer] Initializing for agent: ${agentId}`);
+  console.log(`[infer] Provider type: ${agent.model_provider_type}`);
 
   // Build system prompt from soul config or task description
   const systemPrompt = soulConfig || agent.soul_config || `You are an AI assistant. Your task: ${taskDescription || agent.task_description}
 
 Be helpful, concise, and professional in your responses.`;
 
-  // Fetch recent message history for context
+  // Fetch recent message history for context (last 5 messages for efficiency)
   const history = (await sql`
     SELECT role, content
     FROM agent_messages
     WHERE agent_id = ${agentId}
     ORDER BY created_at DESC
-    LIMIT 10
+    LIMIT 5
   `) as { role: string; content: string }[];
 
   // Build messages array (reverse to get chronological order)
@@ -73,19 +76,48 @@ Be helpful, concise, and professional in your responses.`;
   // Add the current message
   messages.push({ role: "user", content: message });
 
+  // Use Gemini 2.5 Flash for demo-ai provider, OpenAI for system/byok
+  // The "google/gemini-2-flash" model ID routes through the Vercel AI Gateway
+  // to Google's models when AI_GATEWAY_API_KEY is configured
+  const modelId = agent.model_provider_type === "demo-ai" 
+    ? "google/gemini-2-flash"
+    : "openai/gpt-4o-mini";
+
+  console.log(`[infer] Using model: ${modelId}`);
+  console.log(`[infer] Message count: ${messages.length}`);
+
   try {
     // AI SDK 6: pass model as plain string — Vercel AI Gateway handles routing
     const result = await generateText({
-      model: "openai/gpt-4o-mini",
+      model: modelId,
       system: systemPrompt,
       messages,
     });
 
+    console.log(`[infer] Success: generated ${result.text.length} characters`);
     return NextResponse.json({ response: result.text });
   } catch (error: any) {
-    console.error("[infer] AI generation error:", error.message, error.stack);
+    const errorDetails = {
+      message: error.message,
+      cause: error.cause,
+      status: error.status,
+      stack: error.stack?.split('\n')[0],
+    };
+    
+    console.error(`[infer] Inference failed:`, {
+      agentId,
+      model: modelId,
+      error: errorDetails,
+      messageLength: message.length,
+      historyCount: history.length,
+    });
+    
     return NextResponse.json(
-      { error: "AI inference failed", details: error.message },
+      { 
+        error: "AI inference failed", 
+        details: error.message,
+        hint: "Verify AI_GATEWAY_API_KEY is set and the model provider is configured correctly"
+      },
       { status: 500 }
     );
   }
