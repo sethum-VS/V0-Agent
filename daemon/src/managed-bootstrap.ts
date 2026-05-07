@@ -130,25 +130,25 @@ async function pollMessages(
           // INSTALL_SKILL:<slug>
           if (msg.content.startsWith("SYS_CMD:INSTALL_SKILL:")) {
             const slug = msg.content.split(":").slice(3).join(":");
-            console.log(`[openclaw] Installing skill: ${slug}`);
+            console.log("[openclaw] Installing skill: " + slug);
             try {
-              const command = `npx -y clawhub install ${slug} --dir ${sandboxDir}`;
-              console.log(`[openclaw] Executing: ${command}`);
+              const command = "npx -y clawhub install " + slug + " --dir " + sandboxDir;
+              console.log("[openclaw] Executing: " + command);
               await exec(command);
               await postMessage(
                 endpoint,
                 agentId,
-                `Successfully installed skill: ${slug}`
+                "Successfully installed skill: " + slug
               );
-              console.log(`[openclaw] Skill installed successfully: ${slug}`);
+              console.log("[openclaw] Skill installed successfully: " + slug);
             } catch (error: any) {
               const errorMsg = error.message || String(error);
               await postMessage(
                 endpoint,
                 agentId,
-                `Skill installation failed: ${slug} - ${errorMsg}`
+                "Skill installation failed: " + slug + " - " + errorMsg
               );
-              console.error(`[openclaw] Skill installation failed: ${errorMsg}`);
+              console.error("[openclaw] Skill installation failed: " + errorMsg);
             }
             continue;
           }
@@ -156,10 +156,10 @@ async function pollMessages(
           // ENABLE_CHANNEL:TELEGRAM:<token>
           if (msg.content.startsWith("SYS_CMD:ENABLE_CHANNEL:TELEGRAM:")) {
             const token = msg.content.split(":").slice(4).join(":");
-            console.log(`[openclaw] Enabling Telegram channel`);
+            console.log("[openclaw] Enabling Telegram channel");
             try {
               const envPath = join(sandboxDir, ".env");
-              const envContent = `TELEGRAM_BOT_TOKEN=${token}\n`;
+              const envContent = "TELEGRAM_BOT_TOKEN=" + token + "\n";
               await writeFile(envPath, envContent, "utf8");
               await postMessage(
                 endpoint,
@@ -171,16 +171,16 @@ async function pollMessages(
               await postMessage(
                 endpoint,
                 agentId,
-                `Telegram setup failed: ${error.message}`
+                "Telegram setup failed: " + error.message
               );
-              console.error(`[openclaw] Telegram setup failed:`, error);
+              console.error("[openclaw] Telegram setup failed:", error);
             }
             continue;
           }
 
           // DISABLE_CHANNEL:TELEGRAM
           if (msg.content === "SYS_CMD:DISABLE_CHANNEL:TELEGRAM") {
-            console.log(`[openclaw] Disabling Telegram channel`);
+            console.log("[openclaw] Disabling Telegram channel");
             try {
               const envPath = join(sandboxDir, ".env");
               if (existsSync(envPath)) {
@@ -193,12 +193,12 @@ async function pollMessages(
               );
               console.log("[openclaw] Telegram channel disabled");
             } catch (error: any) {
-              console.warn("[openclaw] Telegram disable warning:", error.message);
+              console.warn("[openclaw] Telegram disable warning: " + error.message);
             }
             continue;
           }
 
-          console.log(`[openclaw] Unknown system command: ${msg.content}`);
+          console.log("[openclaw] Unknown system command: " + msg.content);
           continue;
         }
 
