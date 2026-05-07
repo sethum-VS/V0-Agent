@@ -123,7 +123,7 @@ export function SkillManager({ agentId }: { agentId: string }) {
           />
           <Button
             onClick={handleInstallSkill}
-            disabled={isInstalling}
+            disabled={isInstalling || !slugInput.trim()}
             className="bg-blue-600 hover:bg-blue-700 text-white gap-2"
           >
             {isInstalling ? (
@@ -139,35 +139,17 @@ export function SkillManager({ agentId }: { agentId: string }) {
             )}
           </Button>
         </div>
-            <Button
-              onClick={handleInstallSkill}
-              disabled={isInstalling || !slugInput.trim()}
-              className="gap-2"
-            >
-              {isInstalling ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Installing
-                </>
-              ) : (
-                <>
-                  <Plus className="h-4 w-4" />
-                  Install
-                </>
-              )}
-            </Button>
+
+        {error && (
+          <div className="flex gap-2 rounded-lg bg-red-500/10 border border-red-500/20 p-3">
+            <AlertCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+            <p className="text-sm text-red-600">{error}</p>
           </div>
+        )}
 
-          {error && (
-            <div className="flex gap-2 rounded-lg bg-red-500/10 border border-red-500/20 p-3">
-              <AlertCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
-              <p className="text-sm text-red-600">{error}</p>
-            </div>
-          )}
-
-          <p className="text-xs text-muted-foreground">
-            Popular skills: github, weather, slack, linear, notion
-          </p>
+        <p className="text-xs text-muted-foreground">
+          Popular skills: github, weather, slack, linear, notion
+        </p>
         </CardContent>
       </Card>
 
