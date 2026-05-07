@@ -68,8 +68,9 @@ Be helpful, concise, and professional in your responses.`;
   `) as { role: string; content: string }[];
 
   // Build messages array (reverse to get chronological order)
+  // Map database role names to AI SDK role names: "agent" -> "assistant"
   const messages = history.reverse().map(m => ({
-    role: m.role as "user" | "assistant",
+    role: m.role === "agent" ? ("assistant" as const) : (m.role as "user"),
     content: m.content,
   }));
 
