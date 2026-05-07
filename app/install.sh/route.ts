@@ -149,83 +149,83 @@ async function main() {
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        console.log(`[openclaw] Inference attempt ${attempt}/${maxRetries} for: ${userMessage.slice(0, 50)}`);
+        console.log("[openclaw] Inference attempt " + attempt + "/" + maxRetries + " for: " + userMessage.slice(0, 50));
         const res = await fetch(endpoint + "/" + agentId + "/infer", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ message: userMessage, soulConfig, taskDescription }),
         });
-        
+
         if (res.ok) {
           const data = await res.json();
           const response = data.response || "No response generated.";
-          console.log(`[openclaw] Inference success on attempt ${attempt}`);
+          console.log("[openclaw] Inference success on attempt " + attempt);
           return response;
         }
 
-        const errData = await res.json().catch(() => ({}));
-        lastError = `HTTP ${res.status}: ${errData.details || errData.error || "unknown error"}`;
-        console.error(`[openclaw] Inference attempt ${attempt} failed: ${lastError}`);
+        const errData = await res.json().catch(function() { return {}; });
+        lastError = "HTTP " + res.status + ": " + (errData.details || errData.error || "unknown error");
+        console.error("[openclaw] Inference attempt " + attempt + " failed: " + lastError);
 
         if (attempt < maxRetries) {
-          console.log(`[openclaw] Retrying in 2 seconds...`);
-          await new Promise(r => setTimeout(r, 2000));
+          console.log("[openclaw] Retrying in 2 seconds...");
+          await new Promise(function(r) { return setTimeout(r, 2000); });
         }
       } catch (e) {
         lastError = e.message;
-        console.error(`[openclaw] Inference attempt ${attempt} network error: ${lastError}`);
+        console.error("[openclaw] Inference attempt " + attempt + " network error: " + lastError);
         if (attempt < maxRetries) {
-          await new Promise(r => setTimeout(r, 2000));
+          await new Promise(function(r) { return setTimeout(r, 2000); });
         }
       }
     }
 
-    console.error(`[openclaw] Inference failed after ${maxRetries} attempts: ${lastError}`);
-    return `I encountered an error generating a response: ${lastError}`;
+    console.error("[openclaw] Inference failed after " + maxRetries + " attempts: " + lastError);
+    return "I encountered an error generating a response: " + lastError;
   }
 
   // Message polling loop with error recovery
-  let pollErrorCount = 0;
-  setInterval(async () => {
+  var pollErrorCount = 0;
+  setInterval(async function() {
     try {
       const res = await fetch(endpoint + "/" + agentId + "/daemon/messages");
       if (!res.ok) {
-        console.error(`[openclaw] Poll failed: HTTP ${res.status}`);
+        console.error("[openclaw] Poll failed: HTTP " + res.status);
         pollErrorCount++;
         if (pollErrorCount > 10) {
           console.error("[openclaw] Too many poll failures, check connectivity");
         }
         return;
       }
-      
-      pollErrorCount = 0; // Reset error count on success
+
+      pollErrorCount = 0;
       const data = await res.json();
       const messages = data.messages || [];
-      
+
       if (messages.length > 0) {
-        console.log(`[openclaw] Polled: found ${messages.length} unread message(s)`);
+        console.log("[openclaw] Polled: found " + messages.length + " unread message(s)");
       }
 
       for (const msg of messages) {
-        console.log(`[openclaw] Message ${msg.id.slice(0, 8)}: ${msg.content.slice(0, 50).replace(/\n/g, ' ')}...`);
+        console.log("[openclaw] Message " + msg.id.slice(0, 8) + ": " + msg.content.slice(0, 50).replace(/\\n/g, " ") + "...");
         const response = await generateResponse(msg.content);
-        
+
         await fetch(endpoint + "/" + agentId + "/daemon/messages", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ content: response, replyToId: msg.id }),
         });
-        
-        console.log(`[openclaw] Replied with ${response.length} chars`);
+
+        console.log("[openclaw] Replied with " + response.length + " chars");
       }
     } catch (e) {
       pollErrorCount++;
-      console.error(`[openclaw] Poll error (${pollErrorCount}): ${e.message}`);
+      console.error("[openclaw] Poll error (" + pollErrorCount + "): " + e.message);
     }
   }, 5000);
 
   // Heartbeat loop
-  setInterval(async () => {
+  setInterval(async function() {
     try {
       await fetch(endpoint + "/heartbeat", {
         method: "POST",
@@ -238,12 +238,12 @@ async function main() {
   }, 30000);
 }
 
-main().catch((e) => {
+main().catch(function(e) {
   console.error("[openclaw] Fatal error:", e.message);
   process.exit(1);
 });
 
-process.on("SIGINT", () => { console.log("[openclaw] Shutting down..."); process.exit(0); });
+process.on("SIGINT", function() { console.log("[openclaw] Shutting down..."); process.exit(0); });
 DAEMONJS
 
 # 3. Launch the daemon detached using detected runtime
