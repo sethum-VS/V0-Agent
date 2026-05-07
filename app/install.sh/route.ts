@@ -38,31 +38,44 @@ ENDPOINT="${baseUrl}/api/agents"
 OPENCLAW_DIR="$HOME/.openclaw"
 LOG_FILE="$OPENCLAW_DIR/daemon.log"
 
-# Ensure Bun path is always available
-export BUN_INSTALL="$HOME/.bun"
-export PATH="$BUN_INSTALL/bin:$PATH"
+echo "Installing OpenClaw Agent Daemon for Agent $AGENT_ID..."
 
-echo "Installing OpenClaw for Agent $AGENT_ID..."
+# 1. Detect runtime: prefer Node (recommended), fall back to Bun
+RUNTIME=""
+RUNTIME_PATH=""
 
-# 1. Check for Bun (required runtime)
-if ! command -v bun &> /dev/null; then
-  echo "Bun is not installed. Installing Bun..."
-  curl -fsSL https://bun.sh/install | bash
-  # Source the updated PATH
-  source "$HOME/.bashrc" 2>/dev/null || source "$HOME/.zshrc" 2>/dev/null || true
+# Check for Node 22+
+if command -v node &> /dev/null; then
+  NODE_VERSION=$(node -e "console.log(process.version.replace('v','').split('.')[0])" 2>/dev/null || echo "0")
+  if [ "$NODE_VERSION" -ge 22 ] 2>/dev/null; then
+    RUNTIME="node"
+    RUNTIME_PATH=$(which node)
+    echo "Using Node.js $(node --version) at: $RUNTIME_PATH"
+  fi
 fi
 
-# Verify bun is available
-BUN_PATH="$BUN_INSTALL/bin/bun"
-if [ ! -f "$BUN_PATH" ]; then
-  BUN_PATH=$(which bun 2>/dev/null || echo "")
+# Fall back to Bun if Node not available
+if [ -z "$RUNTIME" ]; then
+  export BUN_INSTALL="$HOME/.bun"
+  export PATH="$BUN_INSTALL/bin:$PATH"
+  if ! command -v bun &> /dev/null; then
+    echo "Installing Bun runtime..."
+    curl -fsSL https://bun.sh/install | bash
+    source "$HOME/.bashrc" 2>/dev/null || source "$HOME/.zshrc" 2>/dev/null || true
+  fi
+  BUN_PATH="$BUN_INSTALL/bin/bun"
+  if [ ! -f "$BUN_PATH" ]; then
+    BUN_PATH=$(which bun 2>/dev/null || echo "")
+  fi
+  if [ -n "$BUN_PATH" ] && [ -f "$BUN_PATH" ]; then
+    RUNTIME="bun"
+    RUNTIME_PATH="$BUN_PATH"
+    echo "Using Bun at: $RUNTIME_PATH"
+  else
+    echo "Error: No suitable runtime found. Please install Node 22+ or Bun."
+    exit 1
+  fi
 fi
-if [ -z "$BUN_PATH" ] || [ ! -f "$BUN_PATH" ]; then
-  echo "Error: Bun installation failed. Please install Bun manually: curl -fsSL https://bun.sh/install | bash"
-  exit 1
-fi
-
-echo "Using Bun at: $BUN_PATH"
 
 # 2. Create openclaw directory and daemon
 mkdir -p "$OPENCLAW_DIR/daemon/src"
@@ -73,13 +86,12 @@ cat > package.json << 'PKGJSON'
 {
   "name": "openclaw-daemon",
   "version": "1.0.0",
-  "type": "module",
-  "scripts": { "start": "bun run src/index.ts" }
+  "type": "commonjs"
 }
 PKGJSON
 
-cat > src/index.ts << 'DAEMONTS'
-import { hostname } from "os";
+cat > src/index.js << 'DAEMONJS'
+const { hostname } = require("os");
 
 const args = process.argv.slice(2);
 const agentIdIdx = args.indexOf("--managed");
@@ -98,118 +110,108 @@ console.log("[openclaw] Starting managed daemon for agent:", agentId);
 console.log("[openclaw] Machine ID:", machineId);
 console.log("[openclaw] Endpoint:", endpoint);
 
-// Sync with server (include machineId)
-console.log("[openclaw] Syncing with server...");
-const syncRes = await fetch(endpoint + "/sync", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ agentId, machineId }),
-});
-if (!syncRes.ok) {
-  const errText = await syncRes.text();
-  console.error("[openclaw] Sync failed:", syncRes.status, errText);
-  process.exit(1);
-}
-const config = await syncRes.json() as { soulConfig?: string; taskDescription?: string };
-const soulConfig = config.soulConfig || "";
-const taskDescription = config.taskDescription || "You are a helpful AI assistant.";
-console.log("[openclaw] Synced successfully. Soul config received.");
-
-// Initial heartbeat
-console.log("[openclaw] Sending initial heartbeat...");
-const hbRes = await fetch(endpoint + "/heartbeat", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ agentId, machineId }),
-});
-if (hbRes.ok) {
-  console.log("[openclaw] Initial heartbeat sent successfully.");
-} else {
-  console.error("[openclaw] Initial heartbeat failed:", hbRes.status);
-}
-
-console.log("[openclaw] Daemon online. Starting loops...");
-
-// Simple AI response using server-side inference endpoint
-async function generateResponse(userMessage: string): Promise<string> {
-  try {
-    // Call the server's inference endpoint which handles AI
-    const res = await fetch(endpoint + "/" + agentId + "/infer", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: userMessage, soulConfig, taskDescription }),
-    });
-    if (res.ok) {
-      const data = await res.json() as { response: string };
-      return data.response;
-    } else {
-      console.error("[openclaw] Inference failed:", res.status);
-      return "I apologize, but I encountered an error processing your request.";
-    }
-  } catch (e: any) {
-    console.error("[openclaw] Inference error:", e.message);
-    return "I apologize, but I'm currently unable to respond. Please try again later.";
+async function main() {
+  // Sync with server (include machineId)
+  console.log("[openclaw] Syncing with server...");
+  const syncRes = await fetch(endpoint + "/sync", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ agentId, machineId }),
+  });
+  if (!syncRes.ok) {
+    const errText = await syncRes.text();
+    console.error("[openclaw] Sync failed:", syncRes.status, errText);
+    process.exit(1);
   }
-}
+  const config = await syncRes.json();
+  const soulConfig = config.soulConfig || "";
+  const taskDescription = config.taskDescription || "You are a helpful AI assistant.";
+  console.log("[openclaw] Synced successfully.");
 
-// Message polling loop (every 5 seconds)
-setInterval(async () => {
-  try {
-    const res = await fetch(endpoint + "/" + agentId + "/daemon/messages");
-    if (!res.ok) {
-      console.error("[openclaw] Message poll failed:", res.status);
-      return;
-    }
-    const data = await res.json() as { messages: Array<{ id: string; content: string }> };
-    
-    for (const msg of data.messages) {
-      console.log("[openclaw] Processing message:", msg.id, msg.content);
-      
-      // Generate AI response
-      const response = await generateResponse(msg.content);
-      
-      // Post response back
-      await fetch(endpoint + "/" + agentId + "/daemon/messages", {
+  // Initial heartbeat
+  const hbRes = await fetch(endpoint + "/heartbeat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ agentId, machineId }),
+  });
+  if (hbRes.ok) {
+    console.log("[openclaw] Initial heartbeat OK.");
+  } else {
+    console.error("[openclaw] Initial heartbeat failed:", hbRes.status);
+  }
+
+  console.log("[openclaw] Daemon online. Polling for messages every 5s...");
+
+  // AI response via server inference endpoint
+  async function generateResponse(userMessage) {
+    try {
+      const res = await fetch(endpoint + "/" + agentId + "/infer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: response, replyToId: msg.id }),
+        body: JSON.stringify({ message: userMessage, soulConfig, taskDescription }),
       });
-      
-      console.log("[openclaw] Replied to message:", msg.id);
+      if (res.ok) {
+        const data = await res.json();
+        return data.response || "No response generated.";
+      }
+      const errBody = await res.text();
+      console.error("[openclaw] Inference failed:", res.status, errBody);
+      return "I encountered an error generating a response. Please try again.";
+    } catch (e) {
+      console.error("[openclaw] Inference error:", e.message);
+      return "I am temporarily unavailable. Please try again later.";
     }
-  } catch (e: any) {
-    console.error("[openclaw] Message loop error:", e.message);
   }
-}, 5000);
 
-// Heartbeat loop (every 30 seconds)
-setInterval(async () => {
-  try {
-    const res = await fetch(endpoint + "/heartbeat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ agentId, machineId }),
-    });
-    if (res.ok) {
-      console.log("[openclaw] Heartbeat sent at", new Date().toISOString());
-    } else {
-      console.error("[openclaw] Heartbeat failed:", res.status);
+  // Message polling loop
+  setInterval(async () => {
+    try {
+      const res = await fetch(endpoint + "/" + agentId + "/daemon/messages");
+      if (!res.ok) {
+        console.error("[openclaw] Poll failed:", res.status);
+        return;
+      }
+      const data = await res.json();
+      for (const msg of (data.messages || [])) {
+        console.log("[openclaw] Processing msg:", msg.id, "-", msg.content.slice(0, 60));
+        const response = await generateResponse(msg.content);
+        await fetch(endpoint + "/" + agentId + "/daemon/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content: response, replyToId: msg.id }),
+        });
+        console.log("[openclaw] Replied to:", msg.id);
+      }
+    } catch (e) {
+      console.error("[openclaw] Poll error:", e.message);
     }
-  } catch (e: any) {
-    console.error("[openclaw] Heartbeat error:", e.message);
-  }
-}, 30000);
+  }, 5000);
 
-// Keep process alive
-process.on("SIGINT", () => {
-  console.log("[openclaw] Shutting down...");
-  process.exit(0);
+  // Heartbeat loop
+  setInterval(async () => {
+    try {
+      await fetch(endpoint + "/heartbeat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agentId, machineId }),
+      });
+    } catch (e) {
+      console.error("[openclaw] Heartbeat error:", e.message);
+    }
+  }, 30000);
+}
+
+main().catch((e) => {
+  console.error("[openclaw] Fatal error:", e.message);
+  process.exit(1);
 });
-DAEMONTS
 
-# 3. Launch the daemon detached using absolute path to bun
-echo "Booting background daemon..."
-nohup "$BUN_PATH" run src/index.ts --managed "$AGENT_ID" --endpoint "$ENDPOINT" >> "$LOG_FILE" 2>&1 &
+process.on("SIGINT", () => { console.log("[openclaw] Shutting down..."); process.exit(0); });
+DAEMONJS
+
+# 3. Launch the daemon detached using detected runtime
+echo "Booting background daemon using $RUNTIME..."
+nohup "$RUNTIME_PATH" src/index.js --managed "$AGENT_ID" --endpoint "$ENDPOINT" >> "$LOG_FILE" 2>&1 &
 disown || true
 
 # Give it a moment to start

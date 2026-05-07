@@ -1,7 +1,6 @@
 import { sql } from "@/lib/db";
 import { NextResponse } from "next/server";
 import { generateText } from "ai";
-import { gateway } from "@ai-sdk/gateway";
 
 /**
  * POST /api/agents/[id]/infer
@@ -75,18 +74,18 @@ Be helpful, concise, and professional in your responses.`;
   messages.push({ role: "user", content: message });
 
   try {
-    // Use Vercel AI Gateway for inference
+    // AI SDK 6: pass model as plain string — Vercel AI Gateway handles routing
     const result = await generateText({
-      model: gateway("openai/gpt-4o-mini"),
+      model: "openai/gpt-4o-mini",
       system: systemPrompt,
       messages,
     });
 
     return NextResponse.json({ response: result.text });
   } catch (error: any) {
-    console.error("[infer] AI generation error:", error.message);
+    console.error("[infer] AI generation error:", error.message, error.stack);
     return NextResponse.json(
-      { error: "AI inference failed", response: "I apologize, but I encountered an error. Please try again." },
+      { error: "AI inference failed", details: error.message },
       { status: 500 }
     );
   }
