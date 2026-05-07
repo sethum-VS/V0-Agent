@@ -69,22 +69,32 @@ export async function GET(
             status: "installing",
           });
         }
-      } else if (msg.content.startsWith("✅ Successfully installed skill:")) {
-        const slug = msg.content.replace("✅ Successfully installed skill: ", "").trim();
-        skillMap.set(slug, {
-          slug,
-          status: "installed",
-          installedAt: msg.created_at,
-        });
-      } else if (msg.content.startsWith("❌ Skill installation failed:")) {
-        const parts = msg.content.split(":");
-        const slug = parts[1]?.trim() || "unknown";
-        const error = parts.slice(2).join(":").trim();
-        skillMap.set(slug, {
-          slug,
-          status: "failed",
-          error,
-        });
+      } else if (msg.content.includes("Successfully installed skill:")) {
+        // Match: "Successfully installed skill: github" or "Successfully installed skill: steipete/slack"
+        const slug = msg.content.split("Successfully installed skill:")[1]?.trim();
+        if (slug) {
+          skillMap.set(slug, {
+            slug,
+            status: "installed",
+            installedAt: msg.created_at,
+          });
+        }
+      } else if (msg.content.includes("Skill installation failed:")) {
+        // Match: "Skill installation failed: github - Error message"
+        const parts = msg.content.split("Skill installation failed:");
+        if (parts[1]) {
+          const errorPart = parts[1].trim();
+          const slugMatch = errorPart.match(/^([\w\-/.]+)\s*-\s*(.+)$/);
+          if (slugMatch) {
+            const slug = slugMatch[1];
+            const error = slugMatch[2];
+            skillMap.set(slug, {
+              slug,
+              status: "failed",
+              error,
+            });
+          }
+        }
       }
     }
 
