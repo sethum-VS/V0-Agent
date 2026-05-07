@@ -142,48 +142,85 @@ async function main() {
 
   console.log("[openclaw] Daemon online. Polling for messages every 5s...");
 
-  // AI response via server inference endpoint
+  // AI response via server inference endpoint with retry logic
   async function generateResponse(userMessage) {
-    try {
-      const res = await fetch(endpoint + "/" + agentId + "/infer", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userMessage, soulConfig, taskDescription }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        return data.response || "No response generated.";
+    const maxRetries = 2;
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`[openclaw] Inference attempt ${attempt}/${maxRetries} for: "${userMessage.slice(0, 50)}"`);
+        const res = await fetch(endpoint + "/" + agentId + "/infer", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: userMessage, soulConfig, taskDescription }),
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          const response = data.response || "No response generated.";
+          console.log(`[openclaw] Inference success on attempt ${attempt}`);
+          return response;
+        }
+
+        const errData = await res.json().catch(() => ({}));
+        lastError = `HTTP ${res.status}: ${errData.details || errData.error || "unknown error"}`;
+        console.error(`[openclaw] Inference attempt ${attempt} failed: ${lastError}`);
+
+        if (attempt < maxRetries) {
+          console.log(`[openclaw] Retrying in 2 seconds...`);
+          await new Promise(r => setTimeout(r, 2000));
+        }
+      } catch (e) {
+        lastError = e.message;
+        console.error(`[openclaw] Inference attempt ${attempt} network error: ${lastError}`);
+        if (attempt < maxRetries) {
+          await new Promise(r => setTimeout(r, 2000));
+        }
       }
-      const errBody = await res.text();
-      console.error("[openclaw] Inference failed:", res.status, errBody);
-      return "I encountered an error generating a response. Please try again.";
-    } catch (e) {
-      console.error("[openclaw] Inference error:", e.message);
-      return "I am temporarily unavailable. Please try again later.";
     }
+
+    console.error(`[openclaw] Inference failed after ${maxRetries} attempts: ${lastError}`);
+    return `I encountered an error generating a response: ${lastError}`;
   }
 
-  // Message polling loop
+  // Message polling loop with error recovery
+  let pollErrorCount = 0;
   setInterval(async () => {
     try {
       const res = await fetch(endpoint + "/" + agentId + "/daemon/messages");
       if (!res.ok) {
-        console.error("[openclaw] Poll failed:", res.status);
+        console.error(`[openclaw] Poll failed: HTTP ${res.status}`);
+        pollErrorCount++;
+        if (pollErrorCount > 10) {
+          console.error("[openclaw] Too many poll failures, check connectivity");
+        }
         return;
       }
+      
+      pollErrorCount = 0; // Reset error count on success
       const data = await res.json();
-      for (const msg of (data.messages || [])) {
-        console.log("[openclaw] Processing msg:", msg.id, "-", msg.content.slice(0, 60));
+      const messages = data.messages || [];
+      
+      if (messages.length > 0) {
+        console.log(`[openclaw] Polled: found ${messages.length} unread message(s)`);
+      }
+
+      for (const msg of messages) {
+        console.log(`[openclaw] 📨 Message ${msg.id.slice(0, 8)}: "${msg.content.slice(0, 50).replace(/\n/g, ' ')}..."`);
         const response = await generateResponse(msg.content);
+        
         await fetch(endpoint + "/" + agentId + "/daemon/messages", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ content: response, replyToId: msg.id }),
         });
-        console.log("[openclaw] Replied to:", msg.id);
+        
+        console.log(`[openclaw] ✓ Replied with ${response.length} chars`);
       }
     } catch (e) {
-      console.error("[openclaw] Poll error:", e.message);
+      pollErrorCount++;
+      console.error(`[openclaw] Poll error (${pollErrorCount}): ${e.message}`);
     }
   }, 5000);
 

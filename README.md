@@ -297,6 +297,80 @@ Navigate to [http://localhost:3000](http://localhost:3000)
 
 ## Development
 
+### Key Files & What They Do
+
+| File | Purpose |
+|---|---|
+| `app/api/agents/[id]/infer/route.ts` | Server-side AI inference — routes to Gemini 2.5 (demo-ai) or OpenAI (byok) based on agent config |
+| `app/api/agents/[id]/daemon/messages/route.ts` | Daemon message polling (GET) and response posting (POST) — no authentication required |
+| `app/api/agents/sync/route.ts` | Daemon onboarding — registers machine ID, transitions agent to "online" |
+| `app/install.sh/route.ts` | Embedded daemon source code — runs as Node.js or Bun process locally |
+| `components/workers-list.tsx` | Workers page with agent configs and live diagnostics panel |
+| `components/chat-window.tsx` | Dedicated chat interface with multi-agent support |
+
+### Troubleshooting OpenClaw Agent Connectivity
+
+#### Issue: "AI inference failed" in chat
+
+**Root causes & fixes:**
+
+1. **AI_GATEWAY_API_KEY not set**
+   - Verify env var is configured in Vercel project settings
+   - Restart the dev server after adding it
+   - Check `app/api/agents/[id]/infer/route.ts` logs for `AI inference failed` errors
+
+2. **Daemon not connected (status = "awaiting_connection")**
+   - User must run the install script: `curl -fsSL https://v0-agent-smw.vercel.app/install.sh?agentId=YOUR_AGENT_ID | bash`
+   - Check daemon logs: `tail -f ~/.openclaw/daemon.log`
+   - Verify machine can reach the dashboard: `curl https://v0-agent-smw.vercel.app/api/agents/sync -X POST -H "Content-Type: application/json" -d '{"agentId":"test","machineId":"test"}'`
+
+3. **Gemini 2.5 model errors**
+   - Verify model string is `google/gemini-2-flash` (used for demo-ai agents)
+   - Check that AI Gateway supports this model: `curl https://ai-gateway.vercel.sh/v1/models | grep gemini`
+   - Message format must be compatible — the infer route sends `{ role, content, messages }` format which Gemini accepts
+
+4. **Message polling not working**
+   - Check `/api/agents/[id]/daemon/messages` GET returns unread messages
+   - Verify messages have `role = 'user'` and `is_read = false`
+   - Check daemon logs for `Poll error:` or `Poll failed:` messages
+
+#### Debugging Steps
+
+1. **Open Diagnostics panel** in Workers page → expand agent card → click "Run checks"
+   - Tests: Daemon connection, message polling, AI inference
+   - Shows last heartbeat time and unread message count
+
+2. **Check daemon logs** (on the user's machine):
+   ```bash
+   tail -f ~/.openclaw/daemon.log
+   ```
+   Look for `[openclaw] Inference failed:` or `Poll error:` messages with details.
+
+3. **Test inference manually** (as admin):
+   ```bash
+   curl https://v0-agent-smw.vercel.app/api/agents/AGENT_ID/infer \
+     -X POST \
+     -H "Content-Type: application/json" \
+     -d '{"message":"Hello","taskDescription":"Test agent"}'
+   ```
+
+4. **Enable verbose logging** by adding console.logs to:
+   - `app/api/agents/[id]/infer/route.ts` — logs model selection, message count
+   - `app/install.sh/route.ts` daemon code — logs every fetch attempt with retry info
+
+#### Self-Healing Features
+
+The daemon includes **automatic retry logic**:
+- Inference attempts up to **2 retries** with 2-second backoff
+- Polls recover from network failures automatically
+- Error counts reset on successful poll
+
+If all retries fail, detailed error messages are logged to `~/.openclaw/daemon.log` for debugging.
+
+---
+
+## Development
+
 ### Local Development Flow
 
 ```bash
