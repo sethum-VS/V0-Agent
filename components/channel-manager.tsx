@@ -4,7 +4,6 @@ import { useState, useCallback } from "react";
 import useSWR from "swr";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   MessageCircle,
   Loader2,
@@ -182,15 +181,14 @@ export function ChannelManager({ agentId }: { agentId: string }) {
                   Bot Token
                 </label>
                 <div className="flex gap-2">
-                  <Input
-                    type={showToken ? "text" : "password"}
-                    placeholder="123456:ABC-DEF1234567890..."
-                    value={token}
-                    onChange={(e) => setToken(e.target.value)}
-                    onKeyPress={handleKeyPress}
-                    disabled={isConnecting}
-                    className="font-mono text-sm"
-                  />
+          <input
+            type={showToken ? "text" : "password"}
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            placeholder="123456:ABCdefGHIjklmnoPQRstuvWXYZabcd"
+            disabled={isConnecting}
+            className="w-full px-4 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500 disabled:opacity-50"
+          />
                   <Button
                     variant="ghost"
                     size="sm"

@@ -4,7 +4,6 @@ import { useState, useCallback } from "react";
 import useSWR from "swr";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Zap,
   Loader2,
@@ -113,19 +112,33 @@ export function SkillManager({ agentId }: { agentId: string }) {
           </p>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                type="text"
-                placeholder="Enter skill slug (e.g., github, weather, steipete/slack)"
-                value={slugInput}
-                onChange={(e) => setSlugInput(e.target.value)}
-                onKeyPress={handleKeyPress}
-                disabled={isInstalling}
-                className="pl-9 bg-background/50"
-              />
-            </div>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={slugInput}
+            onChange={(e) => setSlugInput(e.target.value)}
+            placeholder="e.g., github, steipete/slack"
+            disabled={isInstalling}
+            className="flex-1 px-4 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500 disabled:opacity-50"
+          />
+          <Button
+            onClick={handleInstallSkill}
+            disabled={isInstalling}
+            className="bg-blue-600 hover:bg-blue-700 text-white gap-2"
+          >
+            {isInstalling ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Installing...
+              </>
+            ) : (
+              <>
+                <Plus className="w-4 h-4" />
+                Install
+              </>
+            )}
+          </Button>
+        </div>
             <Button
               onClick={handleInstallSkill}
               disabled={isInstalling || !slugInput.trim()}
