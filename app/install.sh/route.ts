@@ -140,7 +140,7 @@ async function main() {
     console.error("[openclaw] Initial heartbeat failed:", hbRes.status);
   }
 
-  console.log("[openclaw] Daemon online. Polling for messages every 5 seconds...");
+  console.log("[openclaw] Daemon online. Polling for messages every 5s...");
 
   // AI response via server inference endpoint with retry logic
   async function generateResponse(userMessage) {
