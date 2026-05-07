@@ -149,7 +149,7 @@ async function main() {
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        console.log(`[openclaw] Inference attempt ${attempt}/${maxRetries} for: "${userMessage.slice(0, 50)}"`);
+        console.log(`[openclaw] Inference attempt ${attempt}/${maxRetries} for: ${userMessage.slice(0, 50)}`);
         const res = await fetch(endpoint + "/" + agentId + "/infer", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
