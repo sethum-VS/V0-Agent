@@ -3,6 +3,8 @@ import { WorkerGrid } from "@/components/worker-grid";
 import { ProvisionForm } from "@/components/provision-form";
 import { DashboardStats } from "@/components/dashboard-stats";
 import { requireAuthOrRedirect } from "@/lib/auth";
+import Link from "next/link";
+import { MessageSquare } from "lucide-react";
 
 export default async function CommandCenter() {
   // Protect this route - redirects to /sign-in if not authenticated
@@ -25,6 +27,13 @@ export default async function CommandCenter() {
               </p>
             </div>
             <div className="flex items-center gap-3">
+              <Link
+                href="/chat"
+                className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-all duration-200 hover:bg-secondary/50 hover:text-foreground"
+                title="Open chat"
+              >
+                <MessageSquare className="h-4 w-4" />
+              </Link>
               <div className="flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/5 px-3 py-1.5">
                 <span className="relative flex h-2 w-2">
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />

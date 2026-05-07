@@ -12,11 +12,13 @@ import {
   LogOut,
   User,
   ChevronRight,
+  MessageSquare,
 } from "lucide-react";
 
 const navigation = [
   { name: "Overview", icon: LayoutDashboard, href: "/" },
   { name: "Workers", icon: Bot, href: "/workers" },
+  { name: "Chat", icon: MessageSquare, href: "/chat" },
   { name: "Activity", icon: Activity, href: "#" },
   { name: "History", icon: History, href: "#" },
 ];
@@ -27,7 +29,7 @@ const bottomNav = [
 
 interface SidebarProps {
   userEmail?: string;
-  currentPage?: "overview" | "workers" | "activity" | "history";
+  currentPage?: "overview" | "workers" | "chat" | "activity" | "history";
 }
 
 export function Sidebar({ userEmail, currentPage = "overview" }: SidebarProps) {
