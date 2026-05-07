@@ -24,6 +24,8 @@ export interface Agent {
   last_heartbeat: Date | null;
   model_provider_type: ModelProviderType;
   encrypted_api_key: string | null;
+  telegram_bot_token: string | null;
+  telegram_linked_at: Date | null;
   created_at: Date;
   updated_at: Date;
 }
