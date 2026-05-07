@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import useSWR from "swr";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,15 @@ import {
   Loader2,
   Server,
   Settings,
+  Activity,
+  MessageSquare,
+  Wifi,
+  WifiOff,
+  RefreshCw,
+  Terminal,
+  CheckCircle2,
+  AlertCircle,
+  Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Agent } from "@/lib/db";
@@ -47,6 +56,201 @@ function StatusBadge({ status }: { status: string }) {
     </span>
   );
 }
+
+// ─── Diagnostics Panel ────────────────────────────────────────────────────────
+
+type DiagnosticStatus = "idle" | "running" | "ok" | "error";
+
+interface DiagnosticCheck {
+  label: string;
+  status: DiagnosticStatus;
+  detail: string;
+}
+
+function DiagnosticsPanel({ agent }: { agent: Agent }) {
+  const [checks, setChecks] = useState<DiagnosticCheck[]>([]);
+  const [running, setRunning] = useState(false);
+
+  // Fetch message count for this agent
+  const { data: msgData } = useSWR<{ messages: { id: string }[] }>(
+    `/api/agents/${agent.id}/messages`,
+    (url: string) => fetch(url).then((r) => r.json()),
+    { refreshInterval: 5000 }
+  );
+  const messageCount = msgData?.messages?.length ?? 0;
+
+  const runDiagnostics = useCallback(async () => {
+    setRunning(true);
+    const results: DiagnosticCheck[] = [];
+
+    const update = (label: string, status: DiagnosticStatus, detail: string) => {
+      results.push({ label, status, detail });
+      setChecks([...results]);
+    };
+
+    // Check 1: Agent exists in DB
+    update("Agent DB record", "running", "Checking...");
+    try {
+      const res = await fetch(`/api/agents/${agent.id}`);
+      if (res.ok) {
+        update("Agent DB record", "ok", `Found — status: ${agent.status}`);
+      } else {
+        update("Agent DB record", "error", `HTTP ${res.status}`);
+      }
+    } catch (e: any) {
+      update("Agent DB record", "error", e.message);
+    }
+
+    // Check 2: Daemon heartbeat (is machine connected?)
+    update("Daemon connection", "running", "Checking last heartbeat...");
+    const lastHb = agent.last_heartbeat ? new Date(agent.last_heartbeat) : null;
+    const secsSinceHb = lastHb ? Math.floor((Date.now() - lastHb.getTime()) / 1000) : null;
+    if (agent.status === "online" && secsSinceHb !== null && secsSinceHb < 120) {
+      update("Daemon connection", "ok", `Last heartbeat ${secsSinceHb}s ago`);
+    } else if (agent.status === "awaiting_connection") {
+      update("Daemon connection", "error", "Daemon not yet connected — run the install script");
+    } else if (secsSinceHb !== null && secsSinceHb > 120) {
+      update("Daemon connection", "error", `Stale heartbeat — ${secsSinceHb}s ago`);
+    } else {
+      update("Daemon connection", "error", "No heartbeat recorded");
+    }
+
+    // Check 3: Message poll endpoint
+    update("Message poll API", "running", "Testing /daemon/messages...");
+    try {
+      const res = await fetch(`/api/agents/${agent.id}/daemon/messages`);
+      if (res.ok) {
+        const data = await res.json();
+        update("Message poll API", "ok", `Endpoint OK — ${data.messages?.length ?? 0} unread msgs`);
+      } else {
+        update("Message poll API", "error", `HTTP ${res.status}`);
+      }
+    } catch (e: any) {
+      update("Message poll API", "error", e.message);
+    }
+
+    // Check 4: AI inference test
+    update("AI inference (gateway)", "running", "Sending test prompt...");
+    try {
+      const res = await fetch(`/api/agents/${agent.id}/infer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: "ping", taskDescription: agent.task_description }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const preview = data.response?.slice(0, 60) ?? "";
+        update("AI inference (gateway)", "ok", `Response: "${preview}..."`);
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        update("AI inference (gateway)", "error", `HTTP ${res.status}: ${errData.details || errData.error || "unknown"}`);
+      }
+    } catch (e: any) {
+      update("AI inference (gateway)", "error", e.message);
+    }
+
+    setRunning(false);
+  }, [agent]);
+
+  const statusIcon = (status: DiagnosticStatus) => {
+    if (status === "running") return <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-400" />;
+    if (status === "ok") return <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />;
+    if (status === "error") return <AlertCircle className="h-3.5 w-3.5 text-red-400" />;
+    return <div className="h-3.5 w-3.5 rounded-full border border-border/60" />;
+  };
+
+  return (
+    <div className="mt-4 space-y-3 border-t border-border/40 pt-4">
+      {/* Diagnostics header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Activity className="h-3.5 w-3.5 text-muted-foreground" />
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Diagnostics
+          </span>
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={runDiagnostics}
+          disabled={running}
+          className="h-7 px-2.5 text-xs gap-1.5 text-muted-foreground hover:text-foreground"
+        >
+          {running ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <RefreshCw className="h-3 w-3" />
+          )}
+          {running ? "Running..." : "Run checks"}
+        </Button>
+      </div>
+
+      {/* Quick stats row */}
+      <div className="grid grid-cols-3 gap-2">
+        <div className="rounded-lg bg-secondary/40 border border-border/40 p-2.5 text-center">
+          <div className="flex items-center justify-center gap-1 mb-1">
+            <MessageSquare className="h-3 w-3 text-muted-foreground" />
+          </div>
+          <p className="text-base font-bold text-foreground">{messageCount}</p>
+          <p className="text-[10px] text-muted-foreground mt-0.5">Messages</p>
+        </div>
+        <div className="rounded-lg bg-secondary/40 border border-border/40 p-2.5 text-center">
+          <div className="flex items-center justify-center gap-1 mb-1">
+            {agent.status === "online" ? (
+              <Wifi className="h-3 w-3 text-emerald-400" />
+            ) : (
+              <WifiOff className="h-3 w-3 text-muted-foreground" />
+            )}
+          </div>
+          <p className={cn("text-base font-bold", agent.status === "online" ? "text-emerald-400" : "text-muted-foreground")}>
+            {agent.status === "online" ? "Live" : "Off"}
+          </p>
+          <p className="text-[10px] text-muted-foreground mt-0.5">Connection</p>
+        </div>
+        <div className="rounded-lg bg-secondary/40 border border-border/40 p-2.5 text-center">
+          <div className="flex items-center justify-center gap-1 mb-1">
+            <Zap className="h-3 w-3 text-muted-foreground" />
+          </div>
+          <p className="text-base font-bold text-foreground">
+            {agent.model_provider_type === "byok" ? "BYOK" : "AI"}
+          </p>
+          <p className="text-[10px] text-muted-foreground mt-0.5">Model</p>
+        </div>
+      </div>
+
+      {/* Check results */}
+      {checks.length > 0 && (
+        <div className="rounded-lg bg-secondary/30 border border-border/40 overflow-hidden">
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-border/40 bg-secondary/40">
+            <Terminal className="h-3 w-3 text-muted-foreground" />
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Check Results
+            </span>
+          </div>
+          <div className="divide-y divide-border/30">
+            {checks.map((check, i) => (
+              <div key={i} className="flex items-start gap-2.5 px-3 py-2.5">
+                <div className="mt-0.5 shrink-0">{statusIcon(check.status)}</div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium text-foreground">{check.label}</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{check.detail}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {checks.length === 0 && !running && (
+        <p className="text-[11px] text-muted-foreground text-center py-2 italic">
+          Click &quot;Run checks&quot; to verify connectivity and AI gateway health
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ─── Worker Config Card ────────────────────────────────────────────────────────
 
 function WorkerConfigCard({ agent }: { agent: Agent }) {
   const [expanded, setExpanded] = useState(false);
@@ -161,6 +365,9 @@ function WorkerConfigCard({ agent }: { agent: Agent }) {
                 <p className="text-xs text-muted-foreground">{formatDate(agent.updated_at)}</p>
               </div>
             </div>
+
+            {/* Live diagnostics panel */}
+            <DiagnosticsPanel agent={agent} />
           </div>
         )}
       </CardContent>
