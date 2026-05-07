@@ -27,6 +27,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Agent } from "@/lib/db";
+import { SkillManager } from "./skill-manager";
+import { ChannelManager } from "./channel-manager";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
