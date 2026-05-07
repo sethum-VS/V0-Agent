@@ -207,7 +207,7 @@ async function main() {
       }
 
       for (const msg of messages) {
-        console.log(`[openclaw] 📨 Message ${msg.id.slice(0, 8)}: "${msg.content.slice(0, 50).replace(/\n/g, ' ')}..."`);
+        console.log(`[openclaw] Message ${msg.id.slice(0, 8)}: ${msg.content.slice(0, 50).replace(/\n/g, ' ')}...`);
         const response = await generateResponse(msg.content);
         
         await fetch(endpoint + "/" + agentId + "/daemon/messages", {
@@ -216,7 +216,7 @@ async function main() {
           body: JSON.stringify({ content: response, replyToId: msg.id }),
         });
         
-        console.log(`[openclaw] ✓ Replied with ${response.length} chars`);
+        console.log(`[openclaw] Replied with ${response.length} chars`);
       }
     } catch (e) {
       pollErrorCount++;
