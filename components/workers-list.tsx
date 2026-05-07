@@ -84,24 +84,17 @@ function DiagnosticsPanel({ agent }: { agent: Agent }) {
     const results: DiagnosticCheck[] = [];
 
     const update = (label: string, status: DiagnosticStatus, detail: string) => {
-      results.push({ label, status, detail });
+      // Only add if this label doesn't already exist (avoid duplicates)
+      const existing = results.findIndex((r) => r.label === label);
+      if (existing >= 0) {
+        results[existing] = { label, status, detail };
+      } else {
+        results.push({ label, status, detail });
+      }
       setChecks([...results]);
     };
 
-    // Check 1: Agent exists in DB
-    update("Agent DB record", "running", "Checking...");
-    try {
-      const res = await fetch(`/api/agents/${agent.id}`);
-      if (res.ok) {
-        update("Agent DB record", "ok", `Found — status: ${agent.status}`);
-      } else {
-        update("Agent DB record", "error", `HTTP ${res.status}`);
-      }
-    } catch (e: any) {
-      update("Agent DB record", "error", e.message);
-    }
-
-    // Check 2: Daemon heartbeat (is machine connected?)
+    // Check 1: Daemon heartbeat (is machine connected?)
     update("Daemon connection", "running", "Checking last heartbeat...");
     const lastHb = agent.last_heartbeat ? new Date(agent.last_heartbeat) : null;
     const secsSinceHb = lastHb ? Math.floor((Date.now() - lastHb.getTime()) / 1000) : null;
@@ -115,7 +108,7 @@ function DiagnosticsPanel({ agent }: { agent: Agent }) {
       update("Daemon connection", "error", "No heartbeat recorded");
     }
 
-    // Check 3: Message poll endpoint
+    // Check 2: Message poll endpoint
     update("Message poll API", "running", "Testing /daemon/messages...");
     try {
       const res = await fetch(`/api/agents/${agent.id}/daemon/messages`);
@@ -129,13 +122,13 @@ function DiagnosticsPanel({ agent }: { agent: Agent }) {
       update("Message poll API", "error", e.message);
     }
 
-    // Check 4: AI inference test
+    // Check 3: AI inference test
     update("AI inference (gateway)", "running", "Sending test prompt...");
     try {
       const res = await fetch(`/api/agents/${agent.id}/infer`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: "ping", taskDescription: agent.task_description }),
+        body: JSON.stringify({ message: "Say hello briefly.", taskDescription: agent.task_description }),
       });
       if (res.ok) {
         const data = await res.json();
