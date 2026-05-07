@@ -27,8 +27,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Agent } from "@/lib/db";
-import { SkillManager } from "./skill-manager";
-import { ChannelManager } from "./channel-manager";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -365,12 +363,12 @@ function WorkerConfigCard({ agent }: { agent: Agent }) {
             <DiagnosticsPanel agent={agent} />
 
             {/* Skill Manager */}
-            <div className="border-t border-border/50 pt-4">
+            <div className="border-t border-border/50 pt-4 mt-4">
               <SkillManager agentId={agent.id} />
             </div>
 
             {/* Channel Manager */}
-            <div className="border-t border-border/50 pt-4">
+            <div className="border-t border-border/50 pt-4 mt-4">
               <ChannelManager agentId={agent.id} />
             </div>
           </div>
