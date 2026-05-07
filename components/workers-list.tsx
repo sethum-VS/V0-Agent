@@ -361,6 +361,16 @@ function WorkerConfigCard({ agent }: { agent: Agent }) {
 
             {/* Live diagnostics panel */}
             <DiagnosticsPanel agent={agent} />
+
+            {/* Skill Manager */}
+            <div className="border-t border-border/50 pt-4 mt-4">
+              <SkillManager agentId={agent.id} />
+            </div>
+
+            {/* Channel Manager */}
+            <div className="border-t border-border/50 pt-4 mt-4">
+              <ChannelManager agentId={agent.id} />
+            </div>
           </div>
         )}
       </CardContent>
